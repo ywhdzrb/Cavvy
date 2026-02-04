@@ -1,0 +1,38 @@
+MinGW-w64 Third-Party License Notice
+====================================
+
+EOL includes components from the MinGW-w64 project, which uses multiple 
+licenses for different components:
+
+1. MINGW-W64 HEADERS AND IMPORT LIBRARIES
+   Files: lib/mingw64/x86_64-w64-mingw32/include/*, lib/mingw64/x86_64-w64-mingw32/lib/*.a
+   License: Zope Public License (ZPL) Version 2.1
+   Copyright: (c) 2009-2013 by the mingw-w64 project
+   Full text: See MinGW-w64-ZPL.LICENSE or https://www.gnu.org/licenses/license-list.html#ZPL
+
+   EXCEPTION: Certain files in this category are explicitly marked as 
+   Public Domain (notably the Windows API import libraries such as 
+   libkernel32.a, libuser32.a, etc.)
+
+2. MINGW-W64 RUNTIME (C Runtime Startup)
+   Files: lib/mingw64/x86_64-w64-mingw32/lib/crt*.o, libmingw32.a
+   License: Public Domain (or see COPYING.MinGW-w64-runtime)
+   
+3. GCC RUNTIME LIBRARIES  
+   Files: lib/mingw64/lib/libstdc++.a, libgcc.a, etc.
+   License: GNU General Public License v3 with GCC Runtime Library Exception
+   Copyright: Free Software Foundation, Inc.
+   Full text: See MinGW-w64-GPL.LICENSE
+
+4. GNU BINUTILS
+   Files: mingw-minimal/bin/ld.exe
+   License: GNU General Public License v3
+   Copyright: Free Software Foundation, Inc.
+   Full text: See MinGW-w64-GPL.LICENSE
+
+COMPATIBILITY WITH EOL
+----------------------
+EOL is licensed under GPL v3. All components above are compatible:
+- ZPL 2.1 is GPL-compatible per FSF
+- Public Domain is compatible with all licenses  
+- GPL v3 is the same license as EOL

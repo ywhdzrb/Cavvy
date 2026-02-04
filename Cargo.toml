@@ -1,0 +1,21 @@
+[package]
+name = "eol"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror = "2.0"
+anyhow = "1.0"
+logos = "0.15"
+
+[[bin]]
+name = "eolc"
+path = "src/bin/eolc.rs"
+
+[[bin]]
+name = "eolll"
+path = "src/bin/eolll.rs"
+
+[[bin]]
+name = "ir2exe"
+path = "src/bin/ir2exe.rs"

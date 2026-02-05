@@ -29,7 +29,7 @@ EOL is a milestone in the Ethernos programming language toolchain, being the fir
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/eol.git
+git clone https://github.com/dhjs0000/eol.git
 cd eol
 
 # Build the compiler

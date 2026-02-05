@@ -29,7 +29,7 @@ EOL是整个Ethernos编程语言工具链中的里程碑，它是Ethernos发布�
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/eol.git
+git clone https://github.com/dhjs0000/eol.git
 cd eol
 
 # 构建编译器

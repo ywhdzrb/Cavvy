@@ -54,6 +54,14 @@ pub enum Token {
     While,
     #[token("for")]
     For,
+    #[token("do")]
+    Do,
+    #[token("switch")]
+    Switch,
+    #[token("case")]
+    Case,
+    #[token("default")]
+    Default,
     #[token("return")]
     Return,
     #[token("break")]

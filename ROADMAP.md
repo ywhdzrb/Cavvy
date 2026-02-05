@@ -45,18 +45,20 @@ EOL (Ethernos Object Language) 是一个始终编译为原生机器码的静态�
 ## 阶段一：控制流完善 (0.3.x.x)
 
 ### 0.3.1.x 循环家族
-- [ ] **for 循环** - Java 风格 `for (int i = 0; i < n; i++)`
-- [ ] **增强 for 循环** - `for (Type item : collection)` 遍历集合
-- [ ] **do-while 循环** - `do { ... } while (condition);`
-- [ ] **switch 语句** - Java 风格，支持 `case` 穿透和 `break`
-- [ ] **break/continue 标签** - 嵌套循环控制 `outer: for (...) ... break outer;`
+- [x] **for 循环** - Java 风格 `for (int i = 0; i < n; i++)`
+- [x] **增强 for 循环** - `for (Type item : collection)` 遍历集合
+- [x] **do-while 循环** - `do { ... } while (condition);`
+- [x] **switch 语句** - Java 风格，支持 `case` 穿透和 `break`
+- [x] **break/continue 标签** - 嵌套循环控制 `outer: for (...) ... break outer;`
 
 ### 0.3.2.x 类型系统扩展
+- [ ] **优化当前系统** - 将字面量类型标准化 (如数字默认int，小数默认double等)
 - [ ] **浮点类型** - `float`, `double` 支持
 - [ ] **字符类型** - `char` 类型和字符字面量 `'A'`
 - [ ] **布尔类型** - 原生 `boolean` 类型（true/false）
 - [ ] **long 类型** - 64位有符号整数
 - [ ] **类型转换** - 显式强制转换 `(int)value`
+- [ ] **数组功能** - 数组功能
 
 ### 0.3.3.x 数组完备
 - [ ] **多维数组** - `int[][] matrix = new int[3][3];`

@@ -1,11 +1,12 @@
+*.exe
+*.ll
+
 !/lib/
 !/mingw-minimal/
 !/llvm-minimal/
 
-*.exe
-*.ll
 
-!/llvm-minimal/*.exe
+!/llvm-minimal/bin/*.exe
 
 *.obj
 

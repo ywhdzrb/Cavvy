@@ -65,6 +65,8 @@ pub enum Stmt {
     If(IfStmt),
     While(WhileStmt),
     For(ForStmt),
+    DoWhile(DoWhileStmt),
+    Switch(SwitchStmt),
     Block(Block),
     Break,
     Continue,
@@ -100,6 +102,30 @@ pub struct ForStmt {
     pub condition: Option<Expr>,
     pub update: Option<Expr>,
     pub body: Box<Stmt>,
+    pub loc: SourceLocation,
+}
+
+/// do-while 循环语句
+#[derive(Debug, Clone)]
+pub struct DoWhileStmt {
+    pub condition: Expr,
+    pub body: Box<Stmt>,
+    pub loc: SourceLocation,
+}
+
+/// switch case 分支
+#[derive(Debug, Clone)]
+pub struct Case {
+    pub value: i64,
+    pub body: Vec<Stmt>,
+}
+
+/// switch 语句
+#[derive(Debug, Clone)]
+pub struct SwitchStmt {
+    pub expr: Expr,
+    pub cases: Vec<Case>,
+    pub default: Option<Vec<Stmt>>,
     pub loc: SourceLocation,
 }
 

@@ -1,0 +1,339 @@
+//! 语句代码生成（包含所有控制流结构）
+use crate::codegen::context::IRGenerator;
+use crate::ast::*;
+use crate::types::Type;
+use crate::error::{EolResult, codegen_error};
+
+impl IRGenerator {
+    /// 生成语句块代码
+    pub fn generate_block(&mut self, block: &Block) -> EolResult<()> {
+        for stmt in &block.statements {
+            self.generate_statement(stmt)?;
+        }
+        Ok(())
+    }
+
+    /// 生成单个语句代码
+    pub fn generate_statement(&mut self, stmt: &Stmt) -> EolResult<()> {
+        match stmt {
+            Stmt::Expr(expr) => {
+                self.generate_expression(expr)?;
+            }
+            Stmt::VarDecl(var) => {
+                let var_type = self.type_to_llvm(&var.var_type);
+                self.emit_line(&format!("  %{} = alloca {}", var.name, var_type));
+                // 存储变量类型信息
+                self.var_types.insert(var.name.clone(), var_type.clone());
+
+                if let Some(init) = var.initializer.as_ref() {
+                    let value = self.generate_expression(init)?;
+                    self.emit_line(&format!("  store {}, {}* %{}",
+                        value, var_type, var.name));
+                }
+            }
+            Stmt::Return(expr) => {
+                if let Some(e) = expr.as_ref() {
+                    let value = self.generate_expression(e)?;
+                    self.emit_line(&format!("  ret {}", value));
+                } else {
+                    self.emit_line("  ret void");
+                }
+            }
+            Stmt::Block(block) => {
+                self.generate_block(block)?;
+            }
+            Stmt::If(if_stmt) => {
+                self.generate_if_statement(if_stmt)?;
+            }
+            Stmt::While(while_stmt) => {
+                self.generate_while_statement(while_stmt)?;
+            }
+            Stmt::For(for_stmt) => {
+                self.generate_for_statement(for_stmt)?;
+            }
+            Stmt::DoWhile(do_while_stmt) => {
+                self.generate_do_while_statement(do_while_stmt)?;
+            }
+            Stmt::Switch(switch_stmt) => {
+                self.generate_switch_statement(switch_stmt)?;
+            }
+            Stmt::Break => {
+                self.generate_break_statement()?;
+            }
+            Stmt::Continue => {
+                self.generate_continue_statement()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// 生成 if 语句代码
+    pub fn generate_if_statement(&mut self, if_stmt: &IfStmt) -> EolResult<()> {
+        let then_label = self.new_label("then");
+        let else_label = self.new_label("else");
+        let merge_label = self.new_label("ifmerge");
+
+        let cond = self.generate_expression(&if_stmt.condition)?;
+        let (_, cond_val) = self.parse_typed_value(&cond);
+        let cond_reg = self.new_temp();
+        self.emit_line(&format!("  {} = icmp ne i1 {}, 0", cond_reg, cond_val));
+
+        if if_stmt.else_branch.is_some() {
+            self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+                cond_reg, then_label, else_label));
+        } else {
+            self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+                cond_reg, then_label, merge_label));
+        }
+
+        // then块
+        self.emit_line(&format!("{}:", then_label));
+        self.generate_statement(&if_stmt.then_branch)?;
+        self.emit_line(&format!("  br label %{}", merge_label));
+
+        // else块
+        if let Some(else_branch) = if_stmt.else_branch.as_ref() {
+            self.emit_line(&format!("{}:", else_label));
+            self.generate_statement(else_branch)?;
+            self.emit_line(&format!("  br label %{}", merge_label));
+        }
+
+        // merge块
+        self.emit_line(&format!("{}:", merge_label));
+
+        Ok(())
+    }
+
+    /// 生成 while 语句代码
+    pub fn generate_while_statement(&mut self, while_stmt: &WhileStmt) -> EolResult<()> {
+        let cond_label = self.new_label("while.cond");
+        let body_label = self.new_label("while.body");
+        let end_label = self.new_label("while.end");
+
+        // 进入循环上下文
+        self.enter_loop(cond_label.clone(), end_label.clone());
+
+        self.emit_line(&format!("  br label %{}", cond_label));
+
+        // 条件块
+        self.emit_line(&format!("{}:", cond_label));
+        let cond = self.generate_expression(&while_stmt.condition)?;
+        let (_, cond_val) = self.parse_typed_value(&cond);
+        let cond_reg = self.new_temp();
+        self.emit_line(&format!("  {} = icmp ne i1 {}, 0", cond_reg, cond_val));
+        self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+            cond_reg, body_label, end_label));
+
+        // 循环体
+        self.emit_line(&format!("{}:", body_label));
+        self.generate_statement(&while_stmt.body)?;
+        self.emit_line(&format!("  br label %{}", cond_label));
+
+        // 结束块
+        self.emit_line(&format!("{}:", end_label));
+
+        // 退出循环上下文
+        self.exit_loop();
+
+        Ok(())
+    }
+
+    /// 生成 for 语句代码
+    pub fn generate_for_statement(&mut self, for_stmt: &ForStmt) -> EolResult<()> {
+        let cond_label = self.new_label("for.cond");
+        let body_label = self.new_label("for.body");
+        let update_label = self.new_label("for.update");
+        let end_label = self.new_label("for.end");
+
+        // 初始化部分
+        if let Some(init) = for_stmt.init.as_ref() {
+            self.generate_statement(init)?;
+        }
+
+        // 进入循环上下文（continue 跳转到 update 标签）
+        self.enter_loop(update_label.clone(), end_label.clone());
+
+        self.emit_line(&format!("  br label %{}", cond_label));
+
+        // 条件块
+        self.emit_line(&format!("{}:", cond_label));
+        if let Some(condition) = for_stmt.condition.as_ref() {
+            let cond = self.generate_expression(condition)?;
+            let (_, cond_val) = self.parse_typed_value(&cond);
+            let cond_reg = self.new_temp();
+            self.emit_line(&format!("  {} = icmp ne i1 {}, 0", cond_reg, cond_val));
+            self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+                cond_reg, body_label, end_label));
+        } else {
+            // 无条件时默认跳转到循环体（无限循环）
+            self.emit_line(&format!("  br label %{}", body_label));
+        }
+
+        // 循环体
+        self.emit_line(&format!("{}:", body_label));
+        self.generate_statement(&for_stmt.body)?;
+        self.emit_line(&format!("  br label %{}", update_label));
+
+        // 更新块
+        self.emit_line(&format!("{}:", update_label));
+        if let Some(update) = for_stmt.update.as_ref() {
+            self.generate_expression(update)?;
+        }
+        self.emit_line(&format!("  br label %{}", cond_label));
+
+        // 结束块
+        self.emit_line(&format!("{}:", end_label));
+
+        // 退出循环上下文
+        self.exit_loop();
+
+        Ok(())
+    }
+
+    /// 生成 do-while 语句代码
+    pub fn generate_do_while_statement(&mut self, do_while_stmt: &DoWhileStmt) -> EolResult<()> {
+        let body_label = self.new_label("dowhile.body");
+        let cond_label = self.new_label("dowhile.cond");
+        let end_label = self.new_label("dowhile.end");
+
+        // 进入循环上下文
+        self.enter_loop(cond_label.clone(), end_label.clone());
+
+        // 先执行循环体
+        self.emit_line(&format!("  br label %{}", body_label));
+        self.emit_line(&format!("{}:", body_label));
+        self.generate_statement(&do_while_stmt.body)?;
+        self.emit_line(&format!("  br label %{}", cond_label));
+
+        // 条件检查
+        self.emit_line(&format!("{}:", cond_label));
+        let cond = self.generate_expression(&do_while_stmt.condition)?;
+        let (_, cond_val) = self.parse_typed_value(&cond);
+        let cond_reg = self.new_temp();
+        self.emit_line(&format!("  {} = icmp ne i1 {}, 0", cond_reg, cond_val));
+        self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+            cond_reg, body_label, end_label));
+
+        // 结束块
+        self.emit_line(&format!("{}:", end_label));
+
+        // 退出循环上下文
+        self.exit_loop();
+
+        Ok(())
+    }
+
+    /// 生成 switch 语句代码
+    pub fn generate_switch_statement(&mut self, switch_stmt: &SwitchStmt) -> EolResult<()> {
+        let end_label = self.new_label("switch.end");
+        let default_label = if switch_stmt.default.is_some() {
+            self.new_label("switch.default")
+        } else {
+            end_label.clone()
+        };
+
+        // 生成条件表达式
+        let expr = self.generate_expression(&switch_stmt.expr)?;
+        let (_, expr_val) = self.parse_typed_value(&expr);
+
+        // 创建 case 标签
+        let mut case_labels: Vec<(i64, String, usize)> = Vec::new();
+        for (idx, case) in switch_stmt.cases.iter().enumerate() {
+            let label = self.new_label(&format!("switch.case.{}", case.value));
+            case_labels.push((case.value, label, idx));
+        }
+
+        // 生成 switch 指令
+        self.emit_line(&format!("  switch i64 {}, label %{} [", expr_val, default_label));
+        for (value, label, _) in &case_labels {
+            self.emit_line(&format!("    i64 {}, label %{}", value, label));
+        }
+        self.emit_line("  ]");
+
+        // 生成 case 块
+        let mut fallthrough = false;
+        for i in 0..case_labels.len() {
+            let (value, label, case_idx) = &case_labels[i];
+            let case = &switch_stmt.cases[*case_idx];
+            self.emit_line(&format!("{}:", label));
+
+            // 执行 case 体
+            for (j, stmt) in case.body.iter().enumerate() {
+                match stmt {
+                    Stmt::Break => {
+                        // 遇到 break，跳转到 switch 结束
+                        self.emit_line(&format!("  br label %{}", end_label));
+                        fallthrough = false;
+                        break;
+                    }
+                    _ => {
+                        self.generate_statement(stmt)?;
+                        // 如果不是最后一条，继续执行
+                        if j == case.body.len() - 1 {
+                            // 最后一条语句，检查是否需要穿透
+                            fallthrough = true;
+                        }
+                    }
+                }
+            }
+
+            // 如果不是 break，穿透到下一个 case
+            if fallthrough && i < case_labels.len() - 1 {
+                let (_, next_label, _) = &case_labels[i + 1];
+                self.emit_line(&format!("  br label %{}", next_label));
+                fallthrough = false;
+            } else if fallthrough {
+                // 最后一个 case 没有 break，穿透到 default 或结束
+                if switch_stmt.default.is_some() {
+                    self.emit_line(&format!("  br label %{}", default_label));
+                } else {
+                    self.emit_line(&format!("  br label %{}", end_label));
+                }
+                fallthrough = false;
+            }
+        }
+
+        // 生成 default 块
+        if let Some(default_body) = switch_stmt.default.as_ref() {
+            self.emit_line(&format!("{}:", default_label));
+            for stmt in default_body {
+                match stmt {
+                    Stmt::Break => {
+                        self.emit_line(&format!("  br label %{}", end_label));
+                        break;
+                    }
+                    _ => {
+                        self.generate_statement(stmt)?;
+                    }
+                }
+            }
+            // 确保 default 最后跳转到结束
+            self.emit_line(&format!("  br label %{}", end_label));
+        }
+
+        // 结束块
+        self.emit_line(&format!("{}:", end_label));
+
+        Ok(())
+    }
+
+    /// 生成 break 语句代码
+    fn generate_break_statement(&mut self) -> EolResult<()> {
+        if let Some(loop_ctx) = self.current_loop() {
+            self.emit_line(&format!("  br label %{}", loop_ctx.end_label));
+        } else {
+            return Err(codegen_error("break statement outside of loop".to_string()));
+        }
+        Ok(())
+    }
+
+    /// 生成 continue 语句代码
+    fn generate_continue_statement(&mut self) -> EolResult<()> {
+        if let Some(loop_ctx) = self.current_loop() {
+            self.emit_line(&format!("  br label %{}", loop_ctx.cond_label));
+        } else {
+            return Err(codegen_error("continue statement outside of loop".to_string()));
+        }
+        Ok(())
+    }
+}

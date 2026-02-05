@@ -258,6 +258,8 @@ impl Parser {
             Token::If => self.parse_if_statement(),
             Token::While => self.parse_while_statement(),
             Token::For => self.parse_for_statement(),
+            Token::Do => self.parse_do_while_statement(),
+            Token::Switch => self.parse_switch_statement(),
             Token::Return => self.parse_return_statement(),
             Token::Break => {
                 let _loc = self.current_loc();
@@ -381,6 +383,85 @@ impl Parser {
             condition,
             update,
             body,
+            loc,
+        }))
+    }
+
+    fn parse_do_while_statement(&mut self) -> EolResult<Stmt> {
+        let loc = self.current_loc();
+        self.advance(); // consume 'do'
+        
+        let body = Box::new(self.parse_statement()?);
+        
+        self.consume(&Token::While, "Expected 'while' after 'do'")?;
+        self.consume(&Token::LParen, "Expected '(' after 'while'")?;
+        let condition = self.parse_expression()?;
+        self.consume(&Token::RParen, "Expected ')' after condition")?;
+        self.consume(&Token::Semicolon, "Expected ';' after do-while")?;
+        
+        Ok(Stmt::DoWhile(DoWhileStmt {
+            condition,
+            body,
+            loc,
+        }))
+    }
+
+    fn parse_switch_statement(&mut self) -> EolResult<Stmt> {
+        let loc = self.current_loc();
+        self.advance(); // consume 'switch'
+        
+        self.consume(&Token::LParen, "Expected '(' after 'switch'")?;
+        let expr = self.parse_expression()?;
+        self.consume(&Token::RParen, "Expected ')' after switch expression")?;
+        
+        self.consume(&Token::LBrace, "Expected '{' to start switch body")?;
+        
+        let mut cases = Vec::new();
+        let mut default = None;
+        
+        while !self.check(&Token::RBrace) && !self.is_at_end() {
+            if self.match_token(&Token::Case) {
+                // 解析 case 值
+                let value = match self.current_token() {
+                    Token::IntegerLiteral(Some(v)) => {
+                        let val = *v;  // 解引用获取值
+                        self.advance();
+                        val
+                    }
+                    _ => return Err(self.error("Expected integer literal in case")),
+                };
+                self.consume(&Token::Colon, "Expected ':' after case value")?;
+                
+                // 解析 case 体（直到遇到另一个 case、default 或 }）
+                let mut body = Vec::new();
+                while !self.check(&Token::Case) && !self.check(&Token::Default)
+                    && !self.check(&Token::RBrace) && !self.is_at_end() {
+                    body.push(self.parse_statement()?);
+                }
+                
+                cases.push(Case { value, body });
+            } else if self.match_token(&Token::Default) {
+                self.consume(&Token::Colon, "Expected ':' after 'default'")?;
+                
+                // 解析 default 体
+                let mut body = Vec::new();
+                while !self.check(&Token::Case) && !self.check(&Token::Default)
+                    && !self.check(&Token::RBrace) && !self.is_at_end() {
+                    body.push(self.parse_statement()?);
+                }
+                
+                default = Some(body);
+            } else {
+                return Err(self.error("Expected 'case' or 'default' in switch"));
+            }
+        }
+        
+        self.consume(&Token::RBrace, "Expected '}' to end switch body")?;
+        
+        Ok(Stmt::Switch(SwitchStmt {
+            expr,
+            cases,
+            default,
             loc,
         }))
     }

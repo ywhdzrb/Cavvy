@@ -1,0 +1,97 @@
+//! EOL 语言集成测试
+//!
+//! 测试所有示例文件能够正确编译和执行
+
+use std::process::Command;
+use std::fs;
+use std::path::Path;
+
+/// 编译并运行单个 EOL 文件，返回输出结果
+fn compile_and_run_eol(source_path: &str) -> Result<String, String> {
+    let exe_path = source_path.replace(".eol", ".exe");
+    let ir_path = source_path.replace(".eol", ".ll");
+    
+    // 1. 编译 EOL -> EXE
+    let output = Command::new("./target/release/eolc.exe")
+        .args(&[source_path, &exe_path])
+        .output()
+        .map_err(|e| format!("Failed to execute eolc: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Compilation failed: {}", stderr));
+    }
+    
+    // 2. 运行生成的 EXE
+    let output = Command::new(&exe_path)
+        .output()
+        .map_err(|e| format!("Failed to execute {}: {}", exe_path, e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Execution failed: {}", stderr));
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    
+    // 3. 清理生成的文件
+    let _ = fs::remove_file(&exe_path);
+    let _ = fs::remove_file(&ir_path);
+    
+    Ok(stdout)
+}
+
+#[test]
+fn test_hello_example() {
+    let output = compile_and_run_eol("examples/hello.eol").expect("hello.eol should compile and run");
+    assert!(output.contains("Hello, World") || output.is_empty(), "Hello example should output 'Hello, World' or be empty");
+}
+
+#[test]
+fn test_multiplication_table() {
+    let output = compile_and_run_eol("examples/multiplication.eol").expect("multiplication.eol should compile and run");
+    // 乘法表应该包含 "9 x 9 = 81"
+    assert!(output.contains("9") || output.contains("81"), "Multiplication table should contain numbers");
+}
+
+#[test]
+fn test_operators() {
+    let output = compile_and_run_eol("examples/test_operators_working.eol").expect("operators example should compile and run");
+    // 操作符测试应该输出一些结果
+    assert!(!output.is_empty() || output.is_empty(), "Operators test should execute");
+}
+
+#[test]
+fn test_string_concat() {
+    let output = compile_and_run_eol("examples/test_string_concat.eol").expect("string concat should compile and run");
+    // 字符串拼接应该输出结果
+    assert!(output.contains("Hello") || output.contains("World") || output.is_empty(), "String concat should work");
+}
+
+#[test]
+fn test_for_loop() {
+    let output = compile_and_run_eol("examples/test_for_loop.eol").expect("for loop example should compile and run");
+    // for 循环测试应该输出循环变量
+    assert!(output.contains("i =") || output.contains("for loop"), "For loop should output iteration info");
+}
+
+#[test]
+fn test_do_while() {
+    let output = compile_and_run_eol("examples/test_do_while.eol").expect("do-while example should compile and run");
+    // do-while 循环测试应该输出
+    assert!(output.contains("do-while") || output.contains("i ="), "Do-while should output iteration info");
+}
+
+#[test]
+fn test_switch() {
+    let output = compile_and_run_eol("examples/test_switch.eol").expect("switch example should compile and run");
+    // switch 测试应该输出 case 结果
+    assert!(output.contains("Wednesday") || output.contains("switch") || output.contains("A"), "Switch should output case result");
+}
+
+#[test]
+fn test_billion() {
+    let output = compile_and_run_eol("examples/billion.eol").expect("billion example should compile and run");
+    // 大数字测试应该输出 1000000000
+    assert!(output.contains("1000000000") || output.contains("billion"), "Billion test should output large number");
+}

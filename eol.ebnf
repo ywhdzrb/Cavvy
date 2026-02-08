@@ -1,6 +1,6 @@
 (*
  * EOL (Ethernos Object Language) 语法规范 - EBNF 表示
- * 版本: 0.3.4.1
+ * 版本: 0.3.4.4
  *
  * 本文件使用扩展巴科斯-瑙尔范式 (EBNF) 描述 EOL 编程语言的语法结构。
  * 符号约定:
@@ -20,7 +20,17 @@
 
 program = { class_declaration };
 
-class_declaration = [ modifiers ], "class", identifier, [ ":", identifier ], "{", { class_member }, "}";
+class_declaration = [ annotation ], [ modifiers ], "class", identifier, [ ":", identifier ], "{", { class_member }, "}";
+
+(* 主类注解 - 用于显式指定程序入口类 *)
+annotation = "@", identifier;
+
+(* @main 注解示例：
+ *   @main
+ *   public class MainClass {
+ *       public static void main() { }
+ *   }
+ *)
 
 class_member = field_declaration | method_declaration;
 

@@ -1,0 +1,63 @@
+// 综合测试：calloc 零初始化 + 静态字段
+// 演示新的内存分配和静态字段功能
+
+public class Statistics {
+    // 静态统计字段
+    static long sum;
+    static long count;
+    
+    public static void reset() {
+        Statistics.sum = 0;
+        Statistics.count = 0;
+    }
+    
+    public static void add(long value) {
+        Statistics.sum = Statistics.sum + value;
+        Statistics.count = Statistics.count + 1;
+    }
+    
+    public static long getAverage() {
+        if (Statistics.count == 0) {
+            return 0;
+        }
+        return Statistics.sum / Statistics.count;
+    }
+    
+    public static void printStats() {
+        println("Count: ");
+        println(Statistics.count);
+        println("Sum: ");
+        println(Statistics.sum);
+        println("Average: ");
+        println(Statistics.getAverage());
+    }
+}
+
+public class Main {
+    public static void main(string[] args) {
+        // 测试静态字段初始为零
+        println("=== Initial Statistics (should be all 0) ===");
+        Statistics.printStats();
+        
+        // 添加一些数据
+        println("\n=== Adding values: 10, 20, 30, 40, 50 ===");
+        Statistics.add(10);
+        Statistics.add(20);
+        Statistics.add(30);
+        Statistics.add(40);
+        Statistics.add(50);
+        Statistics.printStats();
+        
+        // 测试数组零初始化与静态字段结合
+        println("\n=== Testing zero-initialized array ===");
+        long[] data = new long[5]();
+        
+        // 将数组值添加到统计中
+        Statistics.add(data[0]);
+        Statistics.add(data[1]);
+        Statistics.add(data[2]);
+        
+        println("After adding 3 zeros:");
+        Statistics.printStats();
+    }
+}

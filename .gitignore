@@ -2,14 +2,14 @@
 *.ll
 *.eol
 
-!/example/
+!/examples/
 !/lib/
 !/mingw-minimal/
 !/llvm-minimal/
 
 
 !/llvm-minimal/bin/*.exe
-!/example/*.eol
+!/examples/*.eol
 
 
 /*.cpp

@@ -1,0 +1,41 @@
+// 测试类静态字段功能
+// 静态字段在类级别共享，自动零初始化
+
+public class Counter {
+    // 静态字段 - 所有实例共享
+    static int count;
+    static long total;
+    
+    public static void increment() {
+        Counter.count = Counter.count + 1;
+        Counter.total = Counter.total + 1;
+    }
+    
+    public static int getCount() {
+        return Counter.count;
+    }
+    
+    public static long getTotal() {
+        return Counter.total;
+    }
+}
+
+public class Main {
+    public static void main(string[] args) {
+        // 测试静态字段初始值为0
+        println("Initial count:");
+        println(Counter.getCount());
+        
+        println("Initial total:");
+        println(Counter.getTotal());
+        
+        // 增加计数器
+        Counter.increment();
+        Counter.increment();
+        Counter.increment();
+        
+        println("After 3 increments:");
+        println(Counter.getCount());
+        println(Counter.getTotal());
+    }
+}

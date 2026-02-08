@@ -1,0 +1,55 @@
+// 测试：使用静态字段实现记忆化（Memoization）
+// 利用零初始化特性简化缓存实现
+
+public class Fibonacci {
+    // 静态缓存数组 - 自动零初始化
+    static long[] memo;
+    static int maxN;
+    
+    public static void init(int n) {
+        Fibonacci.maxN = n;
+        Fibonacci.memo = new long[n]();
+    }
+    
+    public static long fib(int n) {
+        // 基本情况
+        if (n <= 1) {
+            return n;
+        }
+        
+        // 检查缓存（零表示未计算）
+        if (n < Fibonacci.maxN && Fibonacci.memo[n] != 0) {
+            return Fibonacci.memo[n];
+        }
+        
+        // 计算并缓存
+        long result = Fibonacci.fib(n - 1) + Fibonacci.fib(n - 2);
+        
+        if (n < Fibonacci.maxN) {
+            Fibonacci.memo[n] = result;
+        }
+        
+        return result;
+    }
+}
+
+public class Main {
+    public static void main(string[] args) {
+        // 初始化缓存（最多缓存到第41项）
+        Fibonacci.init(41);
+        
+        println("Fibonacci numbers:");
+        
+        // 计算并打印前15个斐波那契数
+        print("F(0) = "); println(Fibonacci.fib(0));
+        print("F(1) = "); println(Fibonacci.fib(1));
+        print("F(2) = "); println(Fibonacci.fib(2));
+        print("F(5) = "); println(Fibonacci.fib(5));
+        print("F(10) = "); println(Fibonacci.fib(10));
+        print("F(15) = "); println(Fibonacci.fib(15));
+        print("F(20) = "); println(Fibonacci.fib(20));
+        
+        println("\nF(40) = ");
+        println(Fibonacci.fib(40));
+    }
+}

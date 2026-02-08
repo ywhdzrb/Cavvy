@@ -1,0 +1,20 @@
+// 测试 @main 注解功能
+// 使用 @main 标记指定主类
+
+@main
+public class MainClass {
+    public static void main() {
+        println("MainClass is the entry point!");
+    }
+}
+
+// 辅助类也有 main 方法，但不是主类
+class HelperClass {
+    public static void main() {
+        println("This should not be the entry point!");
+    }
+    
+    public static int helper() {
+        return 42;
+    }
+}

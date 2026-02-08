@@ -49,6 +49,7 @@ pub enum Modifier {
     Final,
     Abstract,
     Native,
+    Main,  // 标记主类，用于解决多main冲突
 }
 
 #[derive(Debug, Clone)]

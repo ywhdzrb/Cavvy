@@ -1,0 +1,16 @@
+// 测试重复 @main 标记检测
+// 两个类都标记了 @main，应该报错
+
+@main
+public class ClassA {
+    public static void main() {
+        println("ClassA");
+    }
+}
+
+@main
+public class ClassB {
+    public static void main() {
+        println("ClassB");
+    }
+}

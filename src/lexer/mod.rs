@@ -22,6 +22,8 @@ pub enum Token {
     Abstract,
     #[token("native")]
     Native,
+    #[token("@")]
+    At,  // 注解符号
     #[token("class")]
     Class,
     #[token("void")]

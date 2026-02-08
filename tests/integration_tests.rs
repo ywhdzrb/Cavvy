@@ -455,3 +455,14 @@ fn test_overload() {
     assert!(output.contains("All overload tests completed!"),
             "All overload tests should complete, got: {}", output);
 }
+
+#[test]
+fn test_atmain_annotation() {
+    let output = compile_and_run_eol("examples/test_atmain_annotation.eol").expect("@main annotation example should compile and run");
+    // 测试 @main 注解是否正确指定主类
+    assert!(output.contains("MainClass is the entry point!"),
+            "Should output from MainClass, got: {}", output);
+    // 确保没有输出 HelperClass 的内容
+    assert!(!output.contains("This should not be the entry point!"),
+            "Should not output from HelperClass, got: {}", output);
+}

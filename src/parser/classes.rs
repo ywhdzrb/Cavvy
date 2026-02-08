@@ -13,8 +13,26 @@ use super::statements::parse_block;
 /// 解析类声明
 pub fn parse_class(parser: &mut Parser) -> EolResult<ClassDecl> {
     let loc = parser.current_loc();
-    let modifiers = parse_modifiers(parser)?;
-    
+
+    // 检查是否有 @main 注解
+    let has_main_annotation = if parser.check(&Token::At) {
+        parser.advance(); // 消费 @
+        let ident = parser.consume_identifier("Expected identifier after @")?;
+        if ident != "main" {
+            return Err(parser.error(&format!("Unknown annotation: @{} (only @main is supported)", ident)));
+        }
+        true
+    } else {
+        false
+    };
+
+    let mut modifiers = parse_modifiers(parser)?;
+
+    // 如果有 @main 注解，添加 Main 修饰符
+    if has_main_annotation {
+        modifiers.push(Modifier::Main);
+    }
+
     parser.consume(&Token::Class, "Expected 'class' keyword")?;
     
     let name = parser.consume_identifier("Expected class name")?;

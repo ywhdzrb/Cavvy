@@ -32,7 +32,12 @@ impl Parser {
         let mut classes = Vec::new();
         
         while !self.is_at_end() {
-            if self.check(&crate::lexer::Token::Class) || self.check(&crate::lexer::Token::Public) {
+            if self.check(&crate::lexer::Token::Class)
+                || self.check(&crate::lexer::Token::Public)
+                || self.check(&crate::lexer::Token::Private)
+                || self.check(&crate::lexer::Token::Protected)
+                || self.check(&crate::lexer::Token::At)
+            {
                 classes.push(self.parse_class()?);
             } else {
                 return Err(self.error("Expected class declaration"));

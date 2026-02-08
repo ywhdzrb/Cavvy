@@ -1,0 +1,14 @@
+// 测试多 main 冲突检测
+// 两个类都有 main 方法，但没有 @main 标记，应该报错
+
+public class ClassA {
+    public static void main() {
+        println("ClassA");
+    }
+}
+
+public class ClassB {
+    public static void main() {
+        println("ClassB");
+    }
+}

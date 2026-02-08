@@ -13,8 +13,11 @@ impl IRGenerator {
         self.emit_header();
 
         // 找到主类和main方法
+        // 优先选择带有 @main 标记的类，如果没有则选择第一个有 main 方法的类
         let mut main_class = None;
         let mut main_method = None;
+        let mut fallback_main_class = None;
+        let mut fallback_main_method = None;
 
         // 第一遍：收集所有静态字段，并找到main方法
         for class in &program.classes {
@@ -26,11 +29,24 @@ impl IRGenerator {
                     if method.name == "main" &&
                        method.modifiers.contains(&crate::ast::Modifier::Public) &&
                        method.modifiers.contains(&crate::ast::Modifier::Static) {
-                        main_class = Some(class.name.clone());
-                        main_method = Some(method.clone());
+                        // 检查类是否有 @main 标记
+                        if class.modifiers.contains(&crate::ast::Modifier::Main) {
+                            main_class = Some(class.name.clone());
+                            main_method = Some(method.clone());
+                        } else if fallback_main_class.is_none() {
+                            // 保存第一个找到的 main 作为回退
+                            fallback_main_class = Some(class.name.clone());
+                            fallback_main_method = Some(method.clone());
+                        }
                     }
                 }
             }
+        }
+
+        // 如果没有找到带 @main 标记的类，使用回退
+        if main_class.is_none() {
+            main_class = fallback_main_class;
+            main_method = fallback_main_method;
         }
 
         // 生成静态字段的全局变量声明

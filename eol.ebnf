@@ -1,6 +1,6 @@
 (*
  * EOL (Ethernos Object Language) 语法规范 - EBNF 表示
- * 版本: 0.3.3
+ * 版本: 0.3.4.1
  *
  * 本文件使用扩展巴科斯-瑙尔范式 (EBNF) 描述 EOL 编程语言的语法结构。
  * 符号约定:
@@ -45,14 +45,29 @@ field_declaration = [ modifiers ], type, identifier, [ "=", expression ], ";";
  *)
 
 (* ============================================================================
- * 方法声明
+ * 方法声明（支持方法重载和可变参数）
  * ============================================================================ *)
 
 method_declaration = [ modifiers ], ( type | "void" ), identifier, "(", [ parameter_list ], ")", ( block | ";" );
 
-parameter_list = parameter, { ",", parameter };
+(* 方法重载示例：
+ *   public static int add() { return 0; }
+ *   public static int add(int a) { return a; }
+ *   public static int add(int a, int b) { return a + b; }
+ *   public static double add(double a, double b) { return a + b; }
+ *)
+
+parameter_list = parameter, { ",", parameter } | varargs_parameter;
 
 parameter = type, identifier;
+
+(* 可变参数声明 *)
+varargs_parameter = type, "...", identifier;
+
+(* 可变参数示例：
+ *   public static int sum(int... numbers) { ... }
+ *   public static int multiplyAndAdd(int multiplier, int... numbers) { ... }
+ *)
 
 (* ============================================================================
  * 类型系统
@@ -147,12 +162,17 @@ cast_expression = "(", type, ")", unary_expression;
 postfix_expression = primary_expression, { postfix_operator };
 
 postfix_operator = "(", [ argument_list ], ")"
-                 | ".", identifier
+                 | ".", identifier, [ "(", [ argument_list ], ")" ]  (* 方法调用或属性访问 *)
                  | "[", expression, "]"
                  | "++"
                  | "--";
 
 argument_list = expression, { ",", expression };
+
+(* 可变参数调用示例：
+ *   sum(1, 2, 3, 4, 5)
+ *   multiplyAndAdd(2, 10, 20, 30)
+ *)
 
 primary_expression = literal
                    | identifier
@@ -206,6 +226,58 @@ character_literal = "'", ( character | escape_sequence ), "'";
 boolean_literal = "true" | "false";
 
 null_literal = "null";
+
+(* ============================================================================
+ * 字符串方法（内置）
+ * ============================================================================ *)
+
+(* 字符串类型支持以下方法调用：
+ *   int length()                          - 获取字符串长度
+ *   String substring(int begin)           - 从begin开始到末尾的子串
+ *   String substring(int begin, int end)  - 从begin到end的子串
+ *   int indexOf(String str)               - 查找子串位置，未找到返回-1
+ *   String replace(String old, String new) - 替换子串
+ *   char charAt(int index)                - 获取指定位置字符（返回ASCII码）
+ *
+ * 示例：
+ *   string s = "Hello, World!";
+ *   int len = s.length();           // 13
+ *   String sub = s.substring(7);    // "World!"
+ *   int idx = s.indexOf("World");   // 7
+ *)
+
+(* ============================================================================
+ * 数组属性和方法（内置）
+ * ============================================================================ *)
+
+(* 数组支持 length 属性：
+ *   int[] arr = new int[10];
+ *   int len = arr.length;  // 10
+ *
+ * 多维数组：
+ *   int[][] matrix = new int[3][4];
+ *   int rows = matrix.length;     // 3
+ *   int cols = matrix[0].length;  // 4
+ *)
+
+(* ============================================================================
+ * 静态成员访问
+ * ============================================================================ *)
+
+(* 静态字段访问：
+ *   ClassName.fieldName
+ *
+ * 静态方法调用：
+ *   ClassName.methodName(args)
+ *
+ * 示例：
+ *   static int counter;
+ *   public static int getCounter() { return counter; }
+ *
+ *   // 访问静态成员
+ *   int c = MyClass.counter;
+ *   int d = MyClass.getCounter();
+ *)
 
 (* ============================================================================
  * 内置函数

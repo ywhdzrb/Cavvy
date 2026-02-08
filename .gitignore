@@ -11,7 +11,7 @@
 !/llvm-minimal/bin/*.exe
 !/examples/*.eol
 
-
+.trae/
 /*.cpp
 *.obj
 

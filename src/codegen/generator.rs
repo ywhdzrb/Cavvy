@@ -41,19 +41,27 @@ impl IRGenerator {
             self.generate_class(class)?;
         }
 
-        // 生成C入口点main函数
+        // 将代码缓冲区追加到输出（包含函数定义）
+        self.output.push_str(&self.code);
+
+        // 生成C入口点main函数（在函数定义之后）
         if let (Some(class_name), Some(main_method)) = (main_class, main_method) {
-            self.emit_raw("; C entry point");
-            self.emit_raw(&format!("define i32 @main() {{"));
-            self.emit_raw("entry:");
+            self.output.push_str("; C entry point\n");
+            self.output.push_str(&format!("define i32 @main() {{\n"));
+            self.output.push_str("entry:\n");
             // 添加这行：强制设置 UTF-8 代码页
-            self.emit_raw("  call void @SetConsoleOutputCP(i32 65001)");
+            self.output.push_str("  call void @SetConsoleOutputCP(i32 65001)\n");
             // 根据main方法的参数生成正确的函数名
             let main_fn_name = self.generate_method_name(&class_name, &main_method);
-            self.emit_raw(&format!("  call void @{}()", main_fn_name));
-            self.emit_raw("  ret i32 0");
-            self.emit_raw("}");
-            self.emit_raw("");
+            self.output.push_str(&format!("  call void @{}()\n", main_fn_name));
+            self.output.push_str("  ret i32 0\n");
+            self.output.push_str("}\n");
+            self.output.push_str("\n");
+        }
+
+        // 添加所有 Lambda 函数
+        for lambda_code in &self.lambda_functions {
+            self.output.push_str(lambda_code);
         }
 
         // 在开头插入字符串常量声明
@@ -158,6 +166,8 @@ impl IRGenerator {
         self.scope_manager.reset();
         // 清除循环栈
         self.loop_stack.clear();
+        // 清除代码缓冲区
+        self.code.clear();
 
         // 函数签名
         let ret_type = self.current_return_type.clone();

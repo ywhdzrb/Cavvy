@@ -227,7 +227,11 @@ pub enum Token {
     DotDotDot,
     #[token(":")]
     Colon,
-    
+    #[token("::")]
+    DoubleColon,
+    #[token("->")]
+    Arrow,
+
     // 换行（用于跟踪行号）- 支持 Windows \r\n 和 Unix \n
     #[regex(r"\r?\n")]
     Newline,

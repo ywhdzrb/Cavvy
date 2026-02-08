@@ -257,7 +257,7 @@ impl SemanticAnalyzer {
         Ok(())
     }
 
-    fn infer_expr_type(&self, expr: &Expr) -> EolResult<Type> {
+    fn infer_expr_type(&mut self, expr: &Expr) -> EolResult<Type> {
         match expr {
             Expr::Literal(lit) => match lit {
                 LiteralValue::Int32(_) => Ok(Type::Int32),
@@ -391,7 +391,7 @@ impl SemanticAnalyzer {
                     }
 
                     // 尝试查找当前类的方法（无对象调用）- 支持方法重载
-                    if let Some(current_class) = &self.current_class {
+                    if let Some(ref current_class) = self.current_class.clone() {
                         // 先推断所有参数类型
                         let mut arg_types = Vec::new();
                         for arg in &call.args {
@@ -400,12 +400,14 @@ impl SemanticAnalyzer {
 
                         // 使用参数类型查找匹配的方法
                         if let Some(method_info) = self.type_registry.find_method(current_class, name, &arg_types) {
+                            let return_type = method_info.return_type.clone();
+                            let params = method_info.params.clone();
                             // 检查参数类型兼容性（支持可变参数）
-                            if let Err(msg) = self.check_arguments_compatible(&call.args, &method_info.params, call.loc.line, call.loc.column) {
+                            if let Err(msg) = self.check_arguments_compatible(&call.args, &params, call.loc.line, call.loc.column) {
                                 return Err(semantic_error(call.loc.line, call.loc.column, msg));
                             }
 
-                            return Ok(method_info.return_type.clone());
+                            return Ok(return_type);
                         }
                     }
                 }
@@ -422,22 +424,25 @@ impl SemanticAnalyzer {
 
                     // 检查是否是类名（静态方法调用）- 支持方法重载
                     if let Expr::Identifier(class_name) = &*member.object {
-                        if let Some(class_info) = self.type_registry.get_class(class_name) {
-                            // 先推断所有参数类型
-                            let mut arg_types = Vec::new();
-                            for arg in &call.args {
-                                arg_types.push(self.infer_expr_type(arg)?);
-                            }
+                        let class_name = class_name.clone();
+                        // 先推断所有参数类型
+                        let mut arg_types = Vec::new();
+                        for arg in &call.args {
+                            arg_types.push(self.infer_expr_type(arg)?);
+                        }
 
+                        if let Some(class_info) = self.type_registry.get_class(&class_name) {
                             // 使用参数类型查找匹配的静态方法
                             if let Some(method_info) = class_info.find_method(&member.member, &arg_types) {
                                 if method_info.is_static {
+                                    let return_type = method_info.return_type.clone();
+                                    let params = method_info.params.clone();
                                     // 检查参数类型兼容性（支持可变参数）
-                                    if let Err(msg) = self.check_arguments_compatible(&call.args, &method_info.params, call.loc.line, call.loc.column) {
+                                    if let Err(msg) = self.check_arguments_compatible(&call.args, &params, call.loc.line, call.loc.column) {
                                         return Err(semantic_error(call.loc.line, call.loc.column, msg));
                                     }
 
-                                    return Ok(method_info.return_type.clone());
+                                    return Ok(return_type);
                                 }
                             }
                         }
@@ -453,12 +458,14 @@ impl SemanticAnalyzer {
 
                         // 使用参数类型查找匹配的方法
                         if let Some(method_info) = self.type_registry.find_method(&class_name, &member.member, &arg_types) {
+                            let return_type = method_info.return_type.clone();
+                            let params = method_info.params.clone();
                             // 检查参数类型兼容性（支持可变参数）
-                            if let Err(msg) = self.check_arguments_compatible(&call.args, &method_info.params, call.loc.line, call.loc.column) {
+                            if let Err(msg) = self.check_arguments_compatible(&call.args, &params, call.loc.line, call.loc.column) {
                                 return Err(semantic_error(call.loc.line, call.loc.column, msg));
                             }
 
-                            return Ok(method_info.return_type.clone());
+                            return Ok(return_type);
                         } else {
                             return Err(semantic_error(
                                 call.loc.line,
@@ -585,7 +592,7 @@ impl SemanticAnalyzer {
                 // 数组访问: arr[index]
                 let array_type = self.infer_expr_type(&arr.array)?;
                 let index_type = self.infer_expr_type(&arr.index)?;
-                
+
                 if !index_type.is_integer() {
                     return Err(semantic_error(
                         arr.loc.line,
@@ -593,7 +600,7 @@ impl SemanticAnalyzer {
                         format!("Array index must be integer, got {}", index_type)
                     ));
                 }
-                
+
                 match array_type {
                     Type::Array(element_type) => Ok(*element_type),
                     _ => Err(semantic_error(
@@ -602,6 +609,73 @@ impl SemanticAnalyzer {
                         format!("Cannot index non-array type {}", array_type)
                     )),
                 }
+            }
+            Expr::MethodRef(method_ref) => {
+                // 方法引用: ClassName::methodName 或 obj::methodName
+                // 返回函数类型（这里简化为 Object 类型，实际应该返回函数类型）
+                // TODO: 实现完整的函数类型系统
+                if let Some(ref class_name) = method_ref.class_name {
+                    // 检查类是否存在
+                    if !self.type_registry.class_exists(class_name) {
+                        return Err(semantic_error(
+                            method_ref.loc.line,
+                            method_ref.loc.column,
+                            format!("Unknown class: {}", class_name)
+                        ));
+                    }
+                    // 检查方法是否存在
+                    if let Some(class_info) = self.type_registry.get_class(class_name) {
+                        if !class_info.methods.contains_key(&method_ref.method_name) {
+                            return Err(semantic_error(
+                                method_ref.loc.line,
+                                method_ref.loc.column,
+                                format!("Unknown method '{}' for class {}", method_ref.method_name, class_name)
+                            ));
+                        }
+                    }
+                }
+                // 方法引用返回 Object 类型（简化处理）
+                Ok(Type::Object("Function".to_string()))
+            }
+            Expr::Lambda(lambda) => {
+                // Lambda 表达式: (params) -> { body }
+                // 创建新的作用域
+                self.symbol_table.enter_scope();
+
+                // 添加 Lambda 参数到符号表
+                for param in &lambda.params {
+                    let param_type = param.param_type.clone().unwrap_or(Type::Int32);
+                    self.symbol_table.declare(
+                        param.name.clone(),
+                        SemanticSymbolInfo {
+                            name: param.name.clone(),
+                            symbol_type: param_type,
+                            is_final: false,
+                            is_initialized: true,
+                        }
+                    );
+                }
+
+                // 推断 Lambda 体类型
+                let body_type = match &lambda.body {
+                    LambdaBody::Expr(expr) => self.infer_expr_type(expr)?,
+                    LambdaBody::Block(block) => {
+                        // 分析块中的语句
+                        let mut last_type = Type::Void;
+                        for stmt in &block.statements {
+                            // 查找 return 语句来确定返回类型
+                            if let Stmt::Return(Some(ret_expr)) = stmt {
+                                last_type = self.infer_expr_type(ret_expr)?;
+                            }
+                        }
+                        last_type
+                    }
+                };
+
+                self.symbol_table.exit_scope();
+
+                // Lambda 表达式返回 Object 类型（简化处理）
+                Ok(Type::Object("Function".to_string()))
             }
         }
     }
@@ -643,7 +717,7 @@ impl SemanticAnalyzer {
     }
 
     /// 检查参数是否与参数定义兼容（支持可变参数）
-    fn check_arguments_compatible(&self, args: &[Expr], params: &[ParameterInfo], line: usize, column: usize) -> Result<(), String> {
+    fn check_arguments_compatible(&mut self, args: &[Expr], params: &[ParameterInfo], _line: usize, _column: usize) -> Result<(), String> {
         if params.is_empty() {
             if args.is_empty() {
                 return Ok(());
@@ -701,7 +775,7 @@ impl SemanticAnalyzer {
     }
 
     /// 推断 String 方法调用的返回类型
-    fn infer_string_method_call(&self, method_name: &str, args: &[Expr], line: usize, column: usize) -> EolResult<Type> {
+    fn infer_string_method_call(&mut self, method_name: &str, args: &[Expr], line: usize, column: usize) -> EolResult<Type> {
         match method_name {
             "length" => {
                 if !args.is_empty() {

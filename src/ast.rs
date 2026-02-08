@@ -143,6 +143,8 @@ pub enum Expr {
     ArrayCreation(ArrayCreationExpr),
     ArrayAccess(ArrayAccessExpr),
     ArrayInit(ArrayInitExpr),  // 数组初始化: {1, 2, 3}
+    MethodRef(MethodRefExpr),  // 方法引用: ClassName::methodName
+    Lambda(LambdaExpr),        // Lambda 表达式: (params) -> { body }
 }
 
 #[derive(Debug, Clone)]
@@ -274,6 +276,37 @@ pub struct ArrayAccessExpr {
     pub array: Box<Expr>,
     pub index: Box<Expr>,
     pub loc: SourceLocation,
+}
+
+/// 方法引用表达式: ClassName::methodName 或 obj::methodName
+#[derive(Debug, Clone)]
+pub struct MethodRefExpr {
+    pub class_name: Option<String>,  // 类名（静态方法引用）
+    pub object: Option<Box<Expr>>,   // 对象表达式（实例方法引用）
+    pub method_name: String,
+    pub loc: SourceLocation,
+}
+
+/// Lambda 表达式: (params) -> { body }
+#[derive(Debug, Clone)]
+pub struct LambdaExpr {
+    pub params: Vec<LambdaParam>,
+    pub body: LambdaBody,
+    pub loc: SourceLocation,
+}
+
+/// Lambda 参数
+#[derive(Debug, Clone)]
+pub struct LambdaParam {
+    pub name: String,
+    pub param_type: Option<Type>,  // 可选的类型注解
+}
+
+/// Lambda 体（可以是表达式或语句块）
+#[derive(Debug, Clone)]
+pub enum LambdaBody {
+    Expr(Box<Expr>),      // 单表达式: (x) -> x * 2
+    Block(Block),         // 语句块: (x) -> { return x * 2; }
 }
 
 impl Program {

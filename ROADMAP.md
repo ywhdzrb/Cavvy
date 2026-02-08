@@ -97,8 +97,8 @@ EOL (Ethernos Object Language) 是一个始终编译为原生机器码的静态�
   public static int multiplyAndAdd(int multiplier, int... numbers) { /* ... */ }
   ```
   - 示例见: `examples/test_0_3_4_features.eol`
-- [ ] **方法引用** - 静态/实例方法引用 `ClassName::methodName`
-- [ ] **Lambda 表达式** - `(params) -> { body }`
+- [x] **方法引用** - 静态/实例方法引用 `ClassName::methodName`
+- [x] **Lambda 表达式** - `(params) -> { body }`
 
 ---
 

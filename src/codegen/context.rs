@@ -127,6 +127,9 @@ pub struct IRGenerator {
     pub static_field_map: HashMap<String, StaticFieldInfo>, // 静态字段映射（按类名.字段名）
     pub type_registry: Option<TypeRegistry>, // 类型注册表（可选，用于方法查找）
     pub scope_manager: ScopeManager,   // 作用域管理器
+    pub lambda_functions: Vec<String>, // Lambda 函数字符串列表
+    pub code: String,                  // 当前代码缓冲区
+    pub method_declarations: Vec<String>, // 方法声明列表
 }
 
 impl IRGenerator {
@@ -153,6 +156,9 @@ impl IRGenerator {
             static_field_map: HashMap::new(),
             type_registry: None,
             scope_manager: ScopeManager::new(),
+            lambda_functions: Vec::new(),
+            code: String::new(),
+            method_declarations: Vec::new(),
         }
     }
 
@@ -176,13 +182,13 @@ impl IRGenerator {
         }
     }
 
-    /// 发射一行代码
+    /// 发射一行代码到当前代码缓冲区
     pub fn emit_line(&mut self, line: &str) {
         if !line.is_empty() {
-            self.output.push_str(&"  ".repeat(self.indent));
+            self.code.push_str(&"  ".repeat(self.indent));
         }
-        self.output.push_str(line);
-        self.output.push('\n');
+        self.code.push_str(line);
+        self.code.push('\n');
     }
 
     /// 发射代码但不添加缩进（用于全局声明）

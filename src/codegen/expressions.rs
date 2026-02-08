@@ -91,10 +91,6 @@ impl IRGenerator {
 
     /// 提升整数操作数到相同类型
     fn promote_integer_operands(&mut self, left_type: &str, left_val: &str, right_type: &str, right_val: &str) -> (String, String, String) {
-        if left_type == right_type {
-            return (left_type.to_string(), left_val.to_string(), right_val.to_string());
-        }
-        
         // 检查是否为指针类型（如 i8*），指针类型不参与整数提升
         let left_is_ptr = left_type.ends_with('*');
         let right_is_ptr = right_type.ends_with('*');
@@ -104,21 +100,37 @@ impl IRGenerator {
             return (left_type.to_string(), left_val.to_string(), right_val.to_string());
         }
         
-        // 确定提升后的类型（选择位数更大的类型）
-        let left_bits: u32 = left_type.trim_start_matches('i').parse().unwrap_or(64);
-        let right_bits: u32 = right_type.trim_start_matches('i').parse().unwrap_or(64);
-        
-        if left_bits >= right_bits {
-            // 提升右操作数到左操作数的类型
-            let temp = self.new_temp();
-            self.emit_line(&format!("  {} = sext {} {} to {}", temp, right_type, right_val, left_type));
-            (left_type.to_string(), left_val.to_string(), temp)
+        // char (i8) 类型在算术运算中需要提升到 i32
+        let target_type = if left_type == "i8" || right_type == "i8" {
+            "i32"
+        } else if left_type == right_type {
+            return (left_type.to_string(), left_val.to_string(), right_val.to_string());
         } else {
-            // 提升左操作数到右操作数的类型
+            // 确定提升后的类型（选择位数更大的类型）
+            let left_bits: u32 = left_type.trim_start_matches('i').parse().unwrap_or(64);
+            let right_bits: u32 = right_type.trim_start_matches('i').parse().unwrap_or(64);
+            if left_bits >= right_bits { left_type } else { right_type }
+        };
+        
+        // 提升左操作数
+        let promoted_left = if left_type != target_type {
             let temp = self.new_temp();
-            self.emit_line(&format!("  {} = sext {} {} to {}", temp, left_type, left_val, right_type));
-            (right_type.to_string(), temp, right_val.to_string())
-        }
+            self.emit_line(&format!("  {} = sext {} {} to {}", temp, left_type, left_val, target_type));
+            temp
+        } else {
+            left_val.to_string()
+        };
+        
+        // 提升右操作数
+        let promoted_right = if right_type != target_type {
+            let temp = self.new_temp();
+            self.emit_line(&format!("  {} = sext {} {} to {}", temp, right_type, right_val, target_type));
+            temp
+        } else {
+            right_val.to_string()
+        };
+        
+        (target_type.to_string(), promoted_left, promoted_right)
     }
     
     /// 提升浮点操作数到相同类型
@@ -182,6 +194,30 @@ impl IRGenerator {
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
                     self.emit_line(&format!("  {} = fadd {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("{} {}", promoted_type, temp));
+                } else if (left_type.starts_with("i") && (right_type == "float" || right_type == "double")) {
+                    // 整数 + 浮点数：将整数转换为浮点数
+                    let (promoted_type, promoted_right) = if right_type == "double" { ("double", right_val.to_string()) } else { ("float", right_val.to_string()) };
+                    let converted_left = self.new_temp();
+                    if promoted_type == "double" {
+                        self.emit_line(&format!("  {} = sitofp {} {} to double", converted_left, left_type, left_val));
+                    } else {
+                        self.emit_line(&format!("  {} = sitofp {} {} to float", converted_left, left_type, left_val));
+                    }
+                    self.emit_line(&format!("  {} = fadd {} {}, {}",
+                        temp, promoted_type, converted_left, promoted_right));
+                    return Ok(format!("{} {}", promoted_type, temp));
+                } else if ((left_type == "float" || left_type == "double") && right_type.starts_with("i")) {
+                    // 浮点数 + 整数：将整数转换为浮点数
+                    let (promoted_type, promoted_left) = if left_type == "double" { ("double", left_val.to_string()) } else { ("float", left_val.to_string()) };
+                    let converted_right = self.new_temp();
+                    if promoted_type == "double" {
+                        self.emit_line(&format!("  {} = sitofp {} {} to double", converted_right, right_type, right_val));
+                    } else {
+                        self.emit_line(&format!("  {} = sitofp {} {} to float", converted_right, right_type, right_val));
+                    }
+                    self.emit_line(&format!("  {} = fadd {} {}, {}",
+                        temp, promoted_type, promoted_left, converted_right));
                     return Ok(format!("{} {}", promoted_type, temp));
                 } else {
                     return Err(codegen_error(format!("Unsupported addition types: {} and {}", left_type, right_type)));
@@ -1387,6 +1423,48 @@ impl IRGenerator {
 
             return Ok(format!("{} {}", to_type, result));
         }
+        
+        // 字符到字符串（char -> String）- 必须在整数转字符串之前处理
+        if from_type == "i8" && to_type == "i8*" {
+            let result = self.new_temp();
+            self.emit_line(&format!("  {} = call i8* @__eol_char_to_string(i8 {})",
+                result, val));
+            return Ok(format!("{} {}", to_type, result));
+        }
+        
+        // 布尔到字符串（bool -> String）
+        // 布尔可能是 i1 或 i8，需要处理两种情况
+        if (from_type == "i1" || from_type == "i8") && to_type == "i8*" {
+            let result = self.new_temp();
+            let bool_val = if from_type == "i1" {
+                val.to_string()
+            } else {
+                // 将 i8 截断为 i1
+                let temp = self.new_temp();
+                self.emit_line(&format!("  {} = trunc i8 {} to i1", temp, val));
+                temp
+            };
+            self.emit_line(&format!("  {} = call i8* @__eol_bool_to_string(i1 {})",
+                result, bool_val));
+            return Ok(format!("{} {}", to_type, result));
+        }
+        
+        // 整数到字符串（int -> String）- 放在字符和布尔之后
+        if from_type.starts_with("i") && !from_type.ends_with("*") && to_type == "i8*" {
+            // 先将整数扩展到 i64（如果还不是的话），然后调用运行时函数
+            let result = self.new_temp();
+            let i64_val = if from_type == "i64" {
+                val.to_string()
+            } else {
+                let temp = self.new_temp();
+                self.emit_line(&format!("  {} = sext {} {} to i64", temp, from_type, val));
+                temp
+            };
+            self.emit_line(&format!("  {} = call i8* @__eol_int_to_string(i64 {})",
+                result, i64_val));
+            return Ok(format!("{} {}", to_type, result));
+        }
+        
         Err(codegen_error(format!("Unsupported cast from {} to {}", from_type, to_type)))
     }
 

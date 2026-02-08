@@ -646,6 +646,16 @@ fn test_final_variables() {
 }
 
 #[test]
+fn test_type_system_rules() {
+    let output = compile_and_run_eol("examples/test_type_system_rules.eol").expect("type system rules example should compile and run");
+    assert!(output.contains("(string)42 = 42"), "int to string cast should work, got: {}", output);
+    assert!(output.contains("(string)true = true"), "bool to string cast should work, got: {}", output);
+    assert!(output.contains("(string)false = false"), "bool to string cast should work, got: {}", output);
+    assert!(output.contains("5 + 'A' (65) = 70"), "char should promote to int, got: {}", output);
+    assert!(output.contains("All type system rule tests completed!"), "Test should complete, got: {}", output);
+}
+
+#[test]
 fn test_method_chaining() {
     let output = compile_and_run_eol("examples/test_method_chaining.eol").expect("method chaining example should compile and run");
     assert!(output.contains("add(5, 3) = 8"), "Method chaining should work, got: {}", output);

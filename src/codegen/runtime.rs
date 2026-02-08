@@ -17,6 +17,9 @@ impl IRGenerator {
         self.emit_raw("declare void @llvm.memcpy.p0i8.p0i8.i64(i8* noalias nocapture writeonly, i8* noalias nocapture readonly, i64, i1 immarg)");
         self.emit_raw("declare i32 @snprintf(i8*, i64, i8*, ...)");
         self.emit_raw("@.str.float_fmt = private unnamed_addr constant [3 x i8] c\"%f\\00\", align 1");
+        self.emit_raw("@.str.int_fmt = private unnamed_addr constant [5 x i8] c\"%lld\\00\", align 1");
+        self.emit_raw("@.str.true_str = private unnamed_addr constant [5 x i8] c\"true\\00\", align 1");
+        self.emit_raw("@.str.false_str = private unnamed_addr constant [6 x i8] c\"false\\00\", align 1");
         self.emit_raw("");
 
         // 空字符串常量（用于 null 安全）
@@ -26,6 +29,9 @@ impl IRGenerator {
         // 生成运行时函数
         self.emit_string_concat_runtime();
         self.emit_float_to_string_runtime();
+        self.emit_int_to_string_runtime();
+        self.emit_bool_to_string_runtime();
+        self.emit_char_to_string_runtime();
         self.emit_string_length_runtime();
         self.emit_string_substring_runtime();
         self.emit_string_indexof_runtime();
@@ -102,6 +108,51 @@ impl IRGenerator {
         self.emit_raw("  %fmt_ptr = getelementptr [3 x i8], [3 x i8]* @.str.float_fmt, i64 0, i64 0");
         self.emit_raw("  ; 调用 snprintf（指定缓冲区大小）");
         self.emit_raw("  call i32 (i8*, i64, i8*, ...) @snprintf(i8* %buf, i64 64, i8* %fmt_ptr, double %value)");
+        self.emit_raw("  ret i8* %buf");
+        self.emit_raw("}");
+        self.emit_raw("");
+    }
+
+    /// 生成整数到字符串运行时函数
+    fn emit_int_to_string_runtime(&mut self) {
+        self.emit_raw("define i8* @__eol_int_to_string(i64 %value) {");
+        self.emit_raw("entry:");
+        self.emit_raw("  ; 分配堆内存缓冲区（32字节足够存储64位整数）");
+        self.emit_raw("  %buf = call i8* @calloc(i64 1, i64 32)");
+        self.emit_raw("  ; 使用 %lld 格式打印长整数");
+        self.emit_raw("  call i32 (i8*, i64, i8*, ...) @snprintf(i8* %buf, i64 32, i8* getelementptr ([4 x i8], [4 x i8]* @.str.int_fmt, i64 0, i64 0), i64 %value)");
+        self.emit_raw("  ret i8* %buf");
+        self.emit_raw("}");
+        self.emit_raw("");
+    }
+
+    /// 生成布尔到字符串运行时函数
+    fn emit_bool_to_string_runtime(&mut self) {
+        self.emit_raw("define i8* @__eol_bool_to_string(i1 %value) {");
+        self.emit_raw("entry:");
+        self.emit_raw("  ; 根据布尔值返回 \"true\" 或 \"false\"");
+        self.emit_raw("  br i1 %value, label %true_case, label %false_case");
+        self.emit_raw("");
+        self.emit_raw("true_case:");
+        self.emit_raw("  ret i8* getelementptr ([5 x i8], [5 x i8]* @.str.true_str, i64 0, i64 0)");
+        self.emit_raw("");
+        self.emit_raw("false_case:");
+        self.emit_raw("  ret i8* getelementptr ([6 x i8], [6 x i8]* @.str.false_str, i64 0, i64 0)");
+        self.emit_raw("}");
+        self.emit_raw("");
+    }
+
+    /// 生成字符到字符串运行时函数
+    fn emit_char_to_string_runtime(&mut self) {
+        self.emit_raw("define i8* @__eol_char_to_string(i8 %value) {");
+        self.emit_raw("entry:");
+        self.emit_raw("  ; 分配堆内存缓冲区（2字节：字符 + 终止符）");
+        self.emit_raw("  %buf = call i8* @calloc(i64 1, i64 2)");
+        self.emit_raw("  ; 存储字符");
+        self.emit_raw("  store i8 %value, i8* %buf");
+        self.emit_raw("  ; 存储终止符");
+        self.emit_raw("  %end_ptr = getelementptr i8, i8* %buf, i64 1");
+        self.emit_raw("  store i8 0, i8* %end_ptr");
         self.emit_raw("  ret i8* %buf");
         self.emit_raw("}");
         self.emit_raw("");

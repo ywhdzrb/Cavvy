@@ -1,0 +1,123 @@
+// 测试类型系统规则
+// 1. (string)强制转换 - 应该正常工作
+// 2. string+数值类型 报错
+// 3. 数值类型(含char)+数值类型 正确处理
+
+class TestTypeSystemRules {
+    public static void main() {
+        println("=== Type System Rules Tests ===");
+        
+        // Test 1: (string)强制转换 - 应该正常工作
+        println("Test 1: Cast to string");
+        
+        // int to string
+        int num = 42;
+        string numStr = (string)num;
+        print("(string)42 = ");
+        println(numStr);
+        
+        // long to string
+        long bigNum = 1234567890L;
+        string longStr = (string)bigNum;
+        print("(string)1234567890L = ");
+        println(longStr);
+        
+        // char to string
+        char c = 'A';
+        string charStr = (string)c;
+        print("(string)'A' = ");
+        println(charStr);
+        
+        // bool to string
+        bool flag = true;
+        string boolStr = (string)flag;
+        print("(string)true = ");
+        println(boolStr);
+        
+        flag = false;
+        boolStr = (string)flag;
+        print("(string)false = ");
+        println(boolStr);
+        
+        // float to string
+        float f = 3.14f;
+        string floatStr = (string)f;
+        print("(string)3.14f = ");
+        println(floatStr);
+        
+        // double to string
+        double d = 2.71828;
+        string doubleStr = (string)d;
+        print("(string)2.71828 = ");
+        println(doubleStr);
+        
+        // Test 2: string + 数值类型 应该报错 (在强类型语言中)
+        // 注意：下面的代码如果取消注释应该导致编译错误
+        // string s = "Value: ";
+        // string result = s + 42;  // 这应该报错
+        println("Test 2: string + numeric should fail (commented out)");
+        
+        // 正确的做法：使用强制转换
+        string s1 = "Value: ";
+        string s2 = (string)42;
+        string correct = s1 + s2;
+        print("Correct concat with cast: ");
+        println(correct);
+        
+        // Test 3: 数值类型(含char)+数值类型 正确处理
+        println("Test 3: Numeric + Numeric (including char)");
+        
+        // int + int
+        int a = 5;
+        int b = 10;
+        int sum = a + b;
+        print("5 + 10 = ");
+        println(sum);
+        
+        // int + char (char should promote to int)
+        char c1 = 'A';  // ASCII 65
+        int charSum = a + c1;
+        print("5 + 'A' (65) = ");
+        println(charSum);
+        print("Expected: 70");
+        println("");
+        
+        // char + char (both should promote to int)
+        char c2 = 'B';  // ASCII 66
+        char c3 = 'C';  // ASCII 67
+        int charCharSum = c2 + c3;
+        print("'B' (66) + 'C' (67) = ");
+        println(charCharSum);
+        print("Expected: 133");
+        println("");
+        
+        // int + double
+        int i = 10;
+        double d2 = 2.5;
+        double intDoubleSum = i + d2;
+        print("10 + 2.5 = ");
+        println(intDoubleSum);
+        print("Expected: 12.5");
+        println("");
+        
+        // float + int
+        float f2 = 3.5f;
+        int fi = 2;
+        float floatIntSum = f2 + fi;
+        print("3.5f + 2 = ");
+        println(floatIntSum);
+        print("Expected: 5.5");
+        println("");
+        
+        // long + int
+        long l = 100L;
+        int li = 50;
+        long longIntSum = l + li;
+        print("100L + 50 = ");
+        println(longIntSum);
+        print("Expected: 150");
+        println("");
+        
+        println("=== All type system rule tests completed! ===");
+    }
+}

@@ -37,6 +37,7 @@ pub enum Token {
     #[token("double")]
     Double,
     #[token("bool")]
+    #[token("boolean")]
     Bool,
     #[token("string")]
     #[token("String")]

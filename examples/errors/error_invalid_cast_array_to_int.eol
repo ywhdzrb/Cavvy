@@ -1,0 +1,10 @@
+// 错误测试：无效的数组到整数转换
+// 期望错误：Unsupported cast
+
+class ErrorInvalidCastArrayToInt {
+    public static void main() {
+        int[] arr = new int[5];
+        int num = (int)arr;  // 这应该报错：不支持数组到int的转换
+        println(num);
+    }
+}

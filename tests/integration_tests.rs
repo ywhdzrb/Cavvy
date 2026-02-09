@@ -798,3 +798,73 @@ fn test_error_missing_main() {
         error
     );
 }
+
+// ==================== 类型转换测试 ====================
+
+#[test]
+fn test_type_casting_advanced() {
+    let output = compile_and_run_eol("examples/test_type_casting_advanced.eol").expect("advanced type casting example should compile and run");
+    // 测试高级类型转换
+    assert!(output.contains("=== Advanced Type Casting Tests ==="),
+            "Should show advanced type casting test header, got: {}", output);
+    assert!(output.contains("PASS: i32 + double promotion works!"),
+            "i32 + double promotion should work, got: {}", output);
+    assert!(output.contains("PASS: i32 * double promotion works!"),
+            "i32 * double promotion should work, got: {}", output);
+    assert!(output.contains("PASS: double / i32 promotion works!"),
+            "double / i32 promotion should work, got: {}", output);
+    assert!(output.contains("PASS: double to i32 cast works!"),
+            "double to i32 cast should work, got: {}", output);
+    assert!(output.contains("PASS: i32 to double cast works!"),
+            "i32 to double cast should work, got: {}", output);
+    assert!(output.contains("PASS: float to i32 cast works!"),
+            "float to i32 cast should work, got: {}", output);
+    assert!(output.contains("PASS: long to i32 cast works!"),
+            "long to i32 cast should work, got: {}", output);
+    assert!(output.contains("PASS: Comparison with promotion works!"),
+            "Comparison with type promotion should work, got: {}", output);
+    assert!(output.contains("=== All advanced type casting tests completed! ==="),
+            "Advanced type casting tests should complete, got: {}", output);
+}
+
+#[test]
+fn test_type_casting_comprehensive() {
+    let output = compile_and_run_eol("examples/test_type_casting_comprehensive.eol").expect("comprehensive type casting example should compile and run");
+    // 测试综合类型转换
+    assert!(output.contains("=== Comprehensive Type Casting Tests ==="),
+            "Should show comprehensive type casting test header, got: {}", output);
+    assert!(output.contains("char 'A' to int: 65"),
+            "char to int cast should work, got: {}", output);
+    assert!(output.contains("long 2147483647L to int: 2147483647"),
+            "long to int cast should work, got: {}", output);
+    assert!(output.contains("double array elements: 1.000000, 2.500000, 3.000000"),
+            "Array element type conversion should work, got: {}", output);
+    assert!(output.contains("int 42 explicitly to double: 42.000000"),
+            "int to double explicit cast should work, got: {}", output);
+    assert!(output.contains("double 42.0 explicitly to int: 42"),
+            "double to int explicit cast should work, got: {}", output);
+    assert!(output.contains("All comprehensive type casting tests completed!"),
+            "Comprehensive type casting tests should complete, got: {}", output);
+}
+
+#[test]
+fn test_error_invalid_cast_string_to_int() {
+    let error = compile_eol_expect_error("examples/errors/error_invalid_cast_string_to_int.eol")
+        .expect("string to int cast should fail to compile");
+    assert!(
+        error.contains("cast") || error.contains("Cast") || error.contains("unsupported") || error.contains("Unsupported"),
+        "Should report invalid cast error for string to int, got: {}",
+        error
+    );
+}
+
+#[test]
+fn test_error_invalid_cast_array_to_int() {
+    let error = compile_eol_expect_error("examples/errors/error_invalid_cast_array_to_int.eol")
+        .expect("array to int cast should fail to compile");
+    assert!(
+        error.contains("cast") || error.contains("Cast") || error.contains("unsupported") || error.contains("Unsupported"),
+        "Should report invalid cast error for array to int, got: {}",
+        error
+    );
+}

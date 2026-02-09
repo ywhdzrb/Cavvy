@@ -1,0 +1,10 @@
+// 错误测试：无效的字符串到整数转换
+// 期望错误：Unsupported cast
+
+class ErrorInvalidCastStringToInt {
+    public static void main() {
+        String str = "123";
+        int num = (int)str;  // 这应该报错：不支持string到int的转换
+        println(num);
+    }
+}

@@ -1,0 +1,10 @@
+// 错误测试：类型转换溢出
+// 期望错误：编译警告或运行时截断（long大数转i32）
+
+class ErrorTypeCastOverflow {
+    public static void main() {
+        long bigValue = 9999999999L;  // 超过i32范围
+        int truncated = (int)bigValue;  // 这将导致溢出/截断
+        println(truncated);
+    }
+}

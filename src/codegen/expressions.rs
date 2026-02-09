@@ -138,29 +138,62 @@ impl IRGenerator {
         if left_type == right_type {
             return (left_type.to_string(), left_val.to_string(), right_val.to_string());
         }
-        
+
         // 确定提升后的类型（选择精度更高的类型：double > float）
         if left_type == "double" || right_type == "double" {
             let promoted_type = "double".to_string();
             let mut promoted_left = left_val.to_string();
             let mut promoted_right = right_val.to_string();
-            
+
             if left_type == "float" {
                 let temp = self.new_temp();
                 self.emit_line(&format!("  {} = fpext float {} to double", temp, left_val));
                 promoted_left = temp;
             }
-            
+
             if right_type == "float" {
                 let temp = self.new_temp();
                 self.emit_line(&format!("  {} = fpext float {} to double", temp, right_val));
                 promoted_right = temp;
             }
-            
+
             (promoted_type, promoted_left, promoted_right)
         } else {
             // 两者都是float，无需提升
             (left_type.to_string(), left_val.to_string(), right_val.to_string())
+        }
+    }
+
+    /// 处理整数和浮点数的混合运算，将整数转换为浮点数
+    fn promote_mixed_operands(&mut self, left_type: &str, left_val: &str, right_type: &str, right_val: &str) -> Option<(String, String, String)> {
+        // 检查是否是混合类型（整数 + 浮点数）
+        let left_is_int = left_type.starts_with("i") && !left_type.ends_with("*");
+        let right_is_int = right_type.starts_with("i") && !right_type.ends_with("*");
+        let left_is_float = left_type == "float" || left_type == "double";
+        let right_is_float = right_type == "float" || right_type == "double";
+
+        if left_is_int && right_is_float {
+            // 整数 + 浮点数：将整数转换为浮点数
+            let promoted_type = if right_type == "double" { "double" } else { "float" };
+            let converted_left = self.new_temp();
+            if promoted_type == "double" {
+                self.emit_line(&format!("  {} = sitofp {} {} to double", converted_left, left_type, left_val));
+            } else {
+                self.emit_line(&format!("  {} = sitofp {} {} to float", converted_left, left_type, left_val));
+            }
+            Some((promoted_type.to_string(), converted_left, right_val.to_string()))
+        } else if left_is_float && right_is_int {
+            // 浮点数 + 整数：将整数转换为浮点数
+            let promoted_type = if left_type == "double" { "double" } else { "float" };
+            let converted_right = self.new_temp();
+            if promoted_type == "double" {
+                self.emit_line(&format!("  {} = sitofp {} {} to double", converted_right, right_type, right_val));
+            } else {
+                self.emit_line(&format!("  {} = sitofp {} {} to float", converted_right, right_type, right_val));
+            }
+            Some((promoted_type.to_string(), left_val.to_string(), converted_right))
+        } else {
+            None
         }
     }
     
@@ -236,6 +269,11 @@ impl IRGenerator {
                     self.emit_line(&format!("  {} = fsub {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("{} {}", promoted_type, temp));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
+                    self.emit_line(&format!("  {} = fsub {} {}, {}",
+                        temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("{} {}", promoted_type, temp));
                 } else {
                     return Err(codegen_error(format!("Unsupported subtraction types: {} and {}", left_type, right_type)));
                 }
@@ -253,6 +291,11 @@ impl IRGenerator {
                     self.emit_line(&format!("  {} = fmul {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("{} {}", promoted_type, temp));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
+                    self.emit_line(&format!("  {} = fmul {} {}, {}",
+                        temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("{} {}", promoted_type, temp));
                 } else {
                     return Err(codegen_error(format!("Unsupported multiplication types: {} and {}", left_type, right_type)));
                 }
@@ -267,6 +310,11 @@ impl IRGenerator {
                 } else if (left_type == "float" || left_type == "double") && (right_type == "float" || right_type == "double") {
                     // 浮点数除法，需要类型提升
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
+                    self.emit_line(&format!("  {} = fdiv {} {}, {}",
+                        temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("{} {}", promoted_type, temp));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
                     self.emit_line(&format!("  {} = fdiv {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("{} {}", promoted_type, temp));
@@ -298,6 +346,10 @@ impl IRGenerator {
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
                     self.emit_line(&format!("  {} = fcmp oeq {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("i1 {}", temp));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
+                    self.emit_line(&format!("  {} = fcmp oeq {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("i1 {}", temp));
                 } else {
                     return Err(codegen_error(format!("Unsupported equality comparison types: {} and {}", left_type, right_type)));
                 }
@@ -314,6 +366,10 @@ impl IRGenerator {
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
                     self.emit_line(&format!("  {} = fcmp one {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("i1 {}", temp));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
+                    self.emit_line(&format!("  {} = fcmp one {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("i1 {}", temp));
                 } else {
                     return Err(codegen_error(format!("Unsupported inequality comparison types: {} and {}", left_type, right_type)));
                 }
@@ -327,6 +383,10 @@ impl IRGenerator {
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
                     self.emit_line(&format!("  {} = fcmp olt {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("i1 {}", temp));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
+                    self.emit_line(&format!("  {} = fcmp olt {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("i1 {}", temp));
                 } else {
                     return Err(codegen_error(format!("Unsupported less-than comparison types: {} and {}", left_type, right_type)));
                 }
@@ -338,6 +398,10 @@ impl IRGenerator {
                     return Ok(format!("i1 {}", temp));
                 } else if (left_type == "float" || left_type == "double") && (right_type == "float" || right_type == "double") {
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
+                    self.emit_line(&format!("  {} = fcmp ole {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
+                    return Ok(format!("i1 {}", temp));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
                     self.emit_line(&format!("  {} = fcmp ole {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("i1 {}", temp));
                 } else {
@@ -355,6 +419,9 @@ impl IRGenerator {
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
                     self.emit_line(&format!("  {} = fcmp ogt {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
+                    self.emit_line(&format!("  {} = fcmp ogt {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
                 } else {
                     return Err(codegen_error(format!("Unsupported greater-than comparison types: {} and {}", left_type, right_type)));
                 }
@@ -371,6 +438,9 @@ impl IRGenerator {
                     let (promoted_type, promoted_left, promoted_right) = self.promote_float_operands(&left_type, &left_val, &right_type, &right_val);
                     self.emit_line(&format!("  {} = fcmp oge {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
+                } else if let Some((promoted_type, promoted_left, promoted_right)) = self.promote_mixed_operands(&left_type, &left_val, &right_type, &right_val) {
+                    // 混合类型：整数和浮点数
+                    self.emit_line(&format!("  {} = fcmp oge {} {}, {}", temp, promoted_type, promoted_left, promoted_right));
                 } else {
                     return Err(codegen_error(format!("Unsupported greater-than-or-equal comparison types: {} and {}", left_type, right_type)));
                 }
@@ -1263,6 +1333,14 @@ impl IRGenerator {
                         self.emit_line(&format!("  store double {}, double* %{}, align {}", temp, llvm_name, align));
                         return Ok(format!("double {}", temp));
                     }
+                    // 整数到浮点数转换
+                    else if value_type.starts_with("i") && (var_type == "float" || var_type == "double") {
+                        // 整数 -> 浮点数转换
+                        self.emit_line(&format!("  {} = sitofp {} {} to {}", temp, value_type, val, var_type));
+                        let align = self.get_type_align(&var_type);
+                        self.emit_line(&format!("  store {} {}, {}* %{}, align {}", var_type, temp, var_type, llvm_name, align));
+                        return Ok(format!("{} {}", var_type, temp));
+                    }
                     // 整数类型转换
                     else if value_type.starts_with("i") && var_type.starts_with("i") {
                         let from_bits: u32 = value_type.trim_start_matches('i').parse().unwrap_or(64);
@@ -1291,11 +1369,11 @@ impl IRGenerator {
             Expr::ArrayAccess(arr_access) => {
                 // 获取数组元素指针
                 let (elem_type, elem_ptr, _) = self.get_array_element_ptr(arr_access)?;
-                
+
                 // 如果值类型与元素类型不匹配，需要转换
                 if value_type != elem_type {
                     let temp = self.new_temp();
-                    
+
                     // 浮点类型转换
                     if value_type == "double" && elem_type == "float" {
                         // double -> float 转换
@@ -1310,11 +1388,19 @@ impl IRGenerator {
                         self.emit_line(&format!("  store double {}, {}* {}, align {}", temp, elem_type, elem_ptr, align));
                         return Ok(format!("double {}", temp));
                     }
+                    // 整数到浮点数转换
+                    else if value_type.starts_with("i") && (elem_type == "float" || elem_type == "double") {
+                        // 整数 -> 浮点数转换
+                        self.emit_line(&format!("  {} = sitofp {} {} to {}", temp, value_type, val, elem_type));
+                        let align = self.get_type_align(&elem_type);
+                        self.emit_line(&format!("  store {} {}, {}* {}, align {}", elem_type, temp, elem_type, elem_ptr, align));
+                        return Ok(format!("{} {}", elem_type, temp));
+                    }
                     // 整数类型转换
                     else if value_type.starts_with("i") && elem_type.starts_with("i") {
                         let from_bits: u32 = value_type.trim_start_matches('i').parse().unwrap_or(64);
                         let to_bits: u32 = elem_type.trim_start_matches('i').parse().unwrap_or(64);
-                        
+
                         if to_bits > from_bits {
                             // 符号扩展
                             self.emit_line(&format!("  {} = sext {} {} to {}",
@@ -1329,7 +1415,7 @@ impl IRGenerator {
                         return Ok(format!("{} {}", elem_type, temp));
                     }
                 }
-                
+
                 // 类型匹配，直接存储到数组元素
                 let align = self.get_type_align(&elem_type);
                 self.emit_line(&format!("  store {} {}, {}* {}, align {}", elem_type, val, elem_type, elem_ptr, align));

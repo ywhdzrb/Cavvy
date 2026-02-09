@@ -1,0 +1,154 @@
+// 综合类型转换测试
+// 测试各种数值类型之间的转换
+
+public class TypeCastingComprehensiveTest {
+    public static void main(string[] args) {
+        println("=== Comprehensive Type Casting Tests ===");
+
+        // 测试1: 所有整数类型之间的转换
+        println("\n--- Integer Type Conversions ---");
+
+        // byte/char 范围值
+        char c = 'A';
+        int fromChar = (int)c;
+        print("char 'A' to int: ");
+        println(fromChar);
+
+        // 测试2: 浮点数精度转换
+        println("\n--- Floating Point Precision Tests ---");
+
+        double preciseValue = 3.141592653589793;
+        float lessPrecise = (float)preciseValue;
+        print("double 3.141592653589793 to float: ");
+        println(lessPrecise);
+
+        // 测试3: 大数处理
+        println("\n--- Large Number Handling ---");
+
+        long maxInt = 2147483647L;  // i32最大值
+        long minInt = -2147483648L; // i32最小值
+
+        int maxAsInt = (int)maxInt;
+        int minAsInt = (int)minInt;
+
+        print("long 2147483647L to int: ");
+        println(maxAsInt);
+        print("long -2147483648L to int: ");
+        println(minAsInt);
+
+        // 测试4: 负数转换
+        println("\n--- Negative Number Conversions ---");
+
+        int negInt = -100;
+        long negLong = (long)negInt;
+        float negFloat = (float)negInt;
+        double negDouble = (double)negInt;
+
+        print("int -100 to long: ");
+        println(negLong);
+        print("int -100 to float: ");
+        println(negFloat);
+        print("int -100 to double: ");
+        println(negDouble);
+
+        // 测试5: 零值转换
+        println("\n--- Zero Value Conversions ---");
+
+        int zeroInt = 0;
+        long zeroLong = (long)zeroInt;
+        float zeroFloat = (float)zeroInt;
+        double zeroDouble = (double)zeroInt;
+
+        print("int 0 to long: ");
+        println(zeroLong);
+        print("int 0 to float: ");
+        println(zeroFloat);
+        print("int 0 to double: ");
+        println(zeroDouble);
+
+        // 测试6: 浮点数特殊值
+        println("\n--- Floating Point Special Values ---");
+
+        double verySmall = 0.000001;
+        double veryLarge = 1000000.0;
+
+        float smallFloat = (float)verySmall;
+        float largeFloat = (float)veryLarge;
+
+        print("double 0.000001 to float: ");
+        println(smallFloat);
+        print("double 1000000.0 to float: ");
+        println(largeFloat);
+
+        // 测试7: 混合运算链
+        println("\n--- Mixed Operation Chains ---");
+
+        int i = 10;
+        long l = 20L;
+        float f = 2.5f;
+        double d = 3.5;
+
+        // 复杂混合表达式
+        double result = i + l * f - d;
+        print("10 + 20L * 2.5f - 3.5 = ");
+        println(result);
+
+        // 测试8: 类型转换在函数参数中
+        println("\n--- Type Casting in Function Arguments ---");
+
+        int arg1 = 5;
+        double arg2 = 2.5;
+        printSum((double)arg1, arg2);
+
+        // 测试9: 数组元素类型转换
+        println("\n--- Array Element Type Conversions ---");
+
+        double[] doubleArr = new double[3];
+        doubleArr[0] = 1;      // int 赋值给 double 数组
+        doubleArr[1] = 2.5f;   // float 赋值给 double 数组
+        doubleArr[2] = 3L;     // long 赋值给 double 数组
+
+        print("double array elements: ");
+        print(doubleArr[0]);
+        print(", ");
+        print(doubleArr[1]);
+        print(", ");
+        println(doubleArr[2]);
+
+        // 测试10: 显式转换
+        println("\n--- Explicit Conversions ---");
+
+        int small = 42;
+
+        // 显式转换（ widening ）
+        long widened = (long)small;
+        double widenedFloat = (double)small;
+
+        print("int 42 explicitly to long: ");
+        println(widened);
+        print("int 42 explicitly to double: ");
+        println(widenedFloat);
+
+        // 显式转换（ narrowing ）
+        long big = 42L;
+        double precise = 42.0;
+        int narrowed = (int)big;
+        int narrowedFromDouble = (int)precise;
+
+        print("long 42 explicitly to int: ");
+        println(narrowed);
+        print("double 42.0 explicitly to int: ");
+        println(narrowedFromDouble);
+
+        println("\n=== All comprehensive type casting tests completed! ===");
+    }
+
+    public static void printSum(double a, double b) {
+        print("Sum of ");
+        print(a);
+        print(" and ");
+        print(b);
+        print(" = ");
+        println(a + b);
+    }
+}

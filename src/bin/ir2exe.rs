@@ -1,6 +1,32 @@
 use std::env;
 use std::process;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// 查找 clang 可执行文件
+/// 1. 首先尝试直接调用 "clang"（系统 PATH 中）
+/// 2. 如果失败，尝试查找编译器所在目录下的 llvm-minimal/bin/clang.exe
+/// 3. 如果都找不到，返回错误
+fn find_clang() -> Result<PathBuf, String> {
+    // 1. 首先尝试系统 PATH 中的 clang
+    if let Ok(output) = process::Command::new("clang").arg("--version").output() {
+        if output.status.success() {
+            return Ok(PathBuf::from("clang"));
+        }
+    }
+    
+    // 2. 尝试编译器所在目录下的 llvm-minimal
+    if let Ok(exe_path) = env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let bundled_clang = exe_dir.join("llvm-minimal/bin/clang.exe");
+            if bundled_clang.exists() {
+                return Ok(bundled_clang);
+            }
+        }
+    }
+    
+    // 3. 都找不到，返回错误
+    Err("找不到 clang 编译器。请确保 clang 已安装并在 PATH 中，或将 llvm-minimal 放在编译器同目录下。".to_string())
+}
 
 const VERSION: &str = env!("IR2EXE_VERSION");
 
@@ -427,20 +453,24 @@ fn main() {
     }
     println!("");
 
-    let current_dir = env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let clang_exe = current_dir.join("llvm-minimal/bin/clang.exe");
-
-    if !clang_exe.exists() {
-        eprintln!("错误: 找不到 clang.exe 在 {:?}", clang_exe);
-        process::exit(1);
-    }
+    let clang_exe = match find_clang() {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("错误: {}", e);
+            process::exit(1);
+        }
+    };
 
     println!("[I] 正在编译 IR → EXE...");
 
-    // 设置库路径
-    let lib_path1 = current_dir.join("lib/mingw64/x86_64-w64-mingw32/lib");
-    let lib_path2 = current_dir.join("lib/mingw64/lib");
-    let lib_path3 = current_dir.join("lib/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0");
+    // 设置库路径 - 先获取可执行文件所在目录
+    let exe_dir = env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let lib_path1 = exe_dir.join("lib/mingw64/x86_64-w64-mingw32/lib");
+    let lib_path2 = exe_dir.join("lib/mingw64/lib");
+    let lib_path3 = exe_dir.join("lib/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0");
 
     // 构建 clang 命令
     let mut cmd = process::Command::new(&clang_exe);

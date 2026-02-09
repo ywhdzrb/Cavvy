@@ -1,9 +1,35 @@
 use std::env;
 use std::fs;
 use std::process;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use cavvy::Compiler;
 use cavvy::error::{print_error_with_context, cayError};
+
+/// 查找 clang 可执行文件
+/// 1. 首先尝试直接调用 "clang"（系统 PATH 中）
+/// 2. 如果失败，尝试查找编译器所在目录下的 llvm-minimal/bin/clang.exe
+/// 3. 如果都找不到，返回错误
+fn find_clang() -> Result<PathBuf, String> {
+    // 1. 首先尝试系统 PATH 中的 clang
+    if let Ok(output) = process::Command::new("clang").arg("--version").output() {
+        if output.status.success() {
+            return Ok(PathBuf::from("clang"));
+        }
+    }
+    
+    // 2. 尝试编译器所在目录下的 llvm-minimal
+    if let Ok(exe_path) = env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let bundled_clang = exe_dir.join("llvm-minimal/bin/clang.exe");
+            if bundled_clang.exists() {
+                return Ok(bundled_clang);
+            }
+        }
+    }
+    
+    // 3. 都找不到，返回错误
+    Err("找不到 clang 编译器。请确保 clang 已安装并在 PATH 中，或将 llvm-minimal 放在编译器同目录下。".to_string())
+}
 
 const VERSION: &str = env!("CAYC_VERSION");
 
@@ -294,12 +320,7 @@ fn parse_args(args: &[String]) -> Result<(CompileOptions, String, String), Strin
 }
 
 fn optimize_ir(ir_file: &str, opt_level: &str) -> Result<(), String> {
-    let current_dir = env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let clang_exe = current_dir.join("llvm-minimal/bin/clang.exe");
-
-    if !clang_exe.exists() {
-        return Err("找不到 clang.exe，无法优化 IR".to_string());
-    }
+    let clang_exe = find_clang()?;
 
     let temp_file = format!("{}.opt.tmp", ir_file);
 

@@ -1,0 +1,47 @@
+public class TestPrePostValue {
+    public static void main() {
+        // 测试前置/后缀自增/自减的返回值差异
+        int a = 5;
+        int b = 5;
+        
+        // 前缀自增：返回新值
+        int x = ++a;  // a = 6, x = 6
+        print("After x = ++a: a = ");
+        print(a);
+        print(", x = ");
+        println(x);
+        
+        // 后缀自增：返回旧值
+        int y = b++;  // b = 6, y = 5
+        print("After y = b++: b = ");
+        print(b);
+        print(", y = ");
+        println(y);
+        
+        // 测试前缀/后缀自减
+        int c = 10;
+        int d = 10;
+        
+        int m = --c;  // c = 9, m = 9
+        print("After m = --c: c = ");
+        print(c);
+        print(", m = ");
+        println(m);
+        
+        int n = d--;  // d = 9, n = 10
+        print("After n = d--: d = ");
+        print(d);
+        print(", n = ");
+        println(n);
+        
+        // 连续自增
+        int i = 0;
+        int result = ++i + ++i;  // i=1, i=2, result=1+2=3
+        print("After result = ++i + ++i: i = ");
+        print(i);
+        print(", result = ");
+        println(result);
+        
+        println("All pre/post inc/dec value tests passed!");
+    }
+}

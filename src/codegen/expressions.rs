@@ -568,49 +568,50 @@ impl IRGenerator {
                     return Err(codegen_error("Bitwise NOT not supported for floating point".to_string()));
                 }
             }
-            UnaryOp::PreInc | UnaryOp::PostInc => {
-                // i++ 或 ++i
-                let one = if op_type.starts_with("i") { "1" } else { "1.0" };
-                if op_type.starts_with("i") {
-                    self.emit_line(&format!("  {} = add {} {}, {}",
-                        temp, op_type, op_val, one));
+            UnaryOp::PreInc | UnaryOp::PostInc | UnaryOp::PreDec | UnaryOp::PostDec => {
+                // 自增/自减操作：需要先获取变量地址，加载值，计算，存储
+                let is_inc = unary.op == UnaryOp::PreInc || unary.op == UnaryOp::PostInc;
+                let is_pre = unary.op == UnaryOp::PreInc || unary.op == UnaryOp::PreDec;
+                
+                // 获取正确的变量类型和指针
+                let (llvm_type, llvm_ptr) = self.get_lvalue_info(&unary.operand)?;
+                
+                // 加载当前值
+                let load_temp = self.new_temp();
+                self.emit_line(&format!("  {} = load {}, {}* {}, align {}",
+                    load_temp, llvm_type, llvm_type, llvm_ptr, self.get_type_align(&llvm_type)));
+                
+                // 计算新值
+                let new_temp = self.new_temp();
+                let one = if llvm_type == "float" || llvm_type == "double" { "1.0" } else { "1" };
+                if llvm_type == "float" || llvm_type == "double" {
+                    if is_inc {
+                        self.emit_line(&format!("  {} = fadd {} {}, {}",
+                            new_temp, llvm_type, load_temp, one));
+                    } else {
+                        self.emit_line(&format!("  {} = fsub {} {}, {}",
+                            new_temp, llvm_type, load_temp, one));
+                    }
                 } else {
-                    self.emit_line(&format!("  {} = fadd {} {}, {}",
-                        temp, op_type, op_val, one));
+                    if is_inc {
+                        self.emit_line(&format!("  {} = add {} {}, {}",
+                            new_temp, llvm_type, load_temp, one));
+                    } else {
+                        self.emit_line(&format!("  {} = sub {} {}, {}",
+                            new_temp, llvm_type, load_temp, one));
+                    }
                 }
-                // 存储回变量
-                if let Expr::Identifier(name) = unary.operand.as_ref() {
-                    self.emit_line(&format!("  store {} {}, {}* %{}",
-                        op_type, temp, op_type, name));
-                }
-                // 前置返回新值，后置返回旧值
-                if unary.op == UnaryOp::PreInc {
-                    return Ok(format!("{} {}", op_type, temp));
+                
+                // 存储新值
+                self.emit_line(&format!("  store {} {}, {}* {}, align {}",
+                    llvm_type, new_temp, llvm_type, llvm_ptr, self.get_type_align(&llvm_type)));
+                
+                // 前置返回新值，后缀返回旧值
+                return if is_pre {
+                    Ok(format!("{} {}", llvm_type, new_temp))
                 } else {
-                    return Ok(format!("{} {}", op_type, op_val));
-                }
-            }
-            UnaryOp::PreDec | UnaryOp::PostDec => {
-                // i-- 或 --i
-                let one = if op_type.starts_with("i") { "1" } else { "1.0" };
-                if op_type.starts_with("i") {
-                    self.emit_line(&format!("  {} = sub {} {}, {}",
-                        temp, op_type, op_val, one));
-                } else {
-                    self.emit_line(&format!("  {} = fsub {} {}, {}",
-                        temp, op_type, op_val, one));
-                }
-                // 存储回变量
-                if let Expr::Identifier(name) = unary.operand.as_ref() {
-                    self.emit_line(&format!("  store {} {}, {}* %{}",
-                        op_type, temp, op_type, name));
-                }
-                // 前置返回新值，后置返回旧值
-                if unary.op == UnaryOp::PreDec {
-                    return Ok(format!("{} {}", op_type, temp));
-                } else {
-                    return Ok(format!("{} {}", op_type, op_val));
-                }
+                    Ok(format!("{} {}", llvm_type, load_temp))
+                };
             }
         }
         
@@ -2173,5 +2174,38 @@ impl IRGenerator {
         self.emit_line(&format!("  {} = bitcast void (i64)* @{} to i8*", temp, lambda_name));
 
         Ok(format!("i8* {}", temp))
+    }
+
+    /// 获取左值的类型和 LLVM 指针表示
+    /// 返回 (类型字符串, 指针字符串)
+    fn get_lvalue_info(&mut self, expr: &Expr) -> cayResult<(String, String)> {
+        match expr {
+            Expr::Identifier(name) => {
+                // 优先使用作用域管理器获取变量类型
+                let (var_type, llvm_name) = if let Some(scope_type) = self.scope_manager.get_var_type(name) {
+                    let llvm_name = self.scope_manager.get_llvm_name(name).unwrap_or_else(|| name.clone());
+                    (scope_type, llvm_name)
+                } else {
+                    // 检查是否是当前类的静态字段
+                    if !self.current_class.is_empty() {
+                        let static_key = format!("{}.{}", self.current_class, name);
+                        if let Some(field_info) = self.static_field_map.get(&static_key).cloned() {
+                            return Ok((field_info.llvm_type, field_info.name));
+                        }
+                    }
+                    // 回退到旧系统
+                    let var_type = self.var_types.get(name)
+                        .ok_or_else(|| codegen_error(format!("Variable '{}' not found", name)))?
+                        .clone();
+                    (var_type, name.clone())
+                };
+                Ok((var_type, format!("%{}", llvm_name)))
+            }
+            Expr::ArrayAccess(arr) => {
+                let (elem_type, elem_ptr, _) = self.get_array_element_ptr(arr)?;
+                Ok((elem_type, elem_ptr))
+            }
+            _ => Err(codegen_error("Invalid lvalue expression".to_string()))
+        }
     }
 }

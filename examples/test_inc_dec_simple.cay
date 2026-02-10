@@ -1,0 +1,37 @@
+public class TestIncDecSimple {
+    public static void main() {
+        // 简单测试自增和自减
+        int a = 5;
+        int b = 10;
+        
+        // 测试前缀自增
+        ++a;
+        print("a after ++a: ");
+        println(a);
+        
+        // 测试后缀自增
+        b++;
+        print("b after b++: ");
+        println(b);
+        
+        // 测试前缀自减
+        --a;
+        print("a after --a: ");
+        println(a);
+        
+        // 测试后缀自减
+        b--;
+        print("b after b--: ");
+        println(b);
+        
+        // 测试在循环中使用自增
+        print("Loop with i++: ");
+        for (int i = 0; i < 5; i++) {
+            print(i);
+            print(" ");
+        }
+        println("");
+        
+        println("Test completed!");
+    }
+}

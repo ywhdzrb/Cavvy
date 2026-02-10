@@ -1,6 +1,6 @@
 //! 后缀表达式解析
 //!
-//! 处理函数调用、成员访问、数组索引等后缀表达式。
+//! 处理函数调用、成员访问、数组索引、后缀自增自减等后缀表达式。
 
 use crate::ast::*;
 use crate::error::cayResult;
@@ -38,6 +38,20 @@ pub fn parse_postfix(parser: &mut Parser) -> cayResult<Expr> {
             expr = Expr::ArrayAccess(ArrayAccessExpr {
                 array: Box::new(expr),
                 index: Box::new(index),
+                loc,
+            });
+        } else if parser.match_token(&crate::lexer::Token::Inc) {
+            // 后缀自增: i++
+            expr = Expr::Unary(UnaryExpr {
+                op: UnaryOp::PostInc,
+                operand: Box::new(expr),
+                loc,
+            });
+        } else if parser.match_token(&crate::lexer::Token::Dec) {
+            // 后缀自减: i--
+            expr = Expr::Unary(UnaryExpr {
+                op: UnaryOp::PostDec,
+                operand: Box::new(expr),
                 loc,
             });
         } else {

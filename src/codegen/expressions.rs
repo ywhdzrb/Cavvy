@@ -332,6 +332,8 @@ impl IRGenerator {
                 if left_type.starts_with("i") && right_type.starts_with("i") {
                     // 整数除法，需要类型提升
                     let (promoted_type, promoted_left, promoted_right) = self.promote_integer_operands(&left_type, &left_val, &right_type, &right_val);
+                    // 运行时除零检查
+                    self.generate_division_by_zero_check(&promoted_type, &promoted_right)?;
                     self.emit_line(&format!("  {} = sdiv {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("{} {}", promoted_type, temp));
@@ -354,6 +356,8 @@ impl IRGenerator {
                 if left_type.starts_with("i") && right_type.starts_with("i") {
                     // 整数取模，需要类型提升
                     let (promoted_type, promoted_left, promoted_right) = self.promote_integer_operands(&left_type, &left_val, &right_type, &right_val);
+                    // 运行时除零检查（取模也需要检查）
+                    self.generate_division_by_zero_check(&promoted_type, &promoted_right)?;
                     self.emit_line(&format!("  {} = srem {} {}, {}",
                         temp, promoted_type, promoted_left, promoted_right));
                     return Ok(format!("{} {}", promoted_type, temp));
@@ -551,6 +555,32 @@ impl IRGenerator {
                 }
             }
         }
+    }
+
+    /// 生成运行时除零检查代码
+    fn generate_division_by_zero_check(&mut self, val_type: &str, val: &str) -> cayResult<()> {
+        // 创建标签
+        let error_label = self.new_label("div.error");
+        let continue_label = self.new_label("div.cont");
+
+        // 检查除数是否为零
+        let is_zero = self.new_temp();
+        self.emit_line(&format!("  {} = icmp eq {} {}, 0", is_zero, val_type, val));
+        self.emit_line(&format!("  br i1 {}, label %{}, label %{}", is_zero, error_label, continue_label));
+
+        // 错误处理块
+        self.emit_line(&format!("{}:", error_label));
+        // 输出错误信息到 stderr
+        let error_msg = self.get_or_create_string_constant("Error: Division by zero\n");
+        self.emit_line(&format!("  call i32 (i8*, ...) @printf(i8* {})", error_msg));
+        // 调用 exit 退出程序
+        self.emit_line("  call void @exit(i32 1)");
+        self.emit_line("  unreachable");
+
+        // 正常继续块
+        self.emit_line(&format!("{}:", continue_label));
+
+        Ok(())
     }
 
     /// 生成一元表达式代码

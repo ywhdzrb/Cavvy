@@ -64,6 +64,46 @@ fn compile_eol_expect_error(source_path: &str) -> Result<String, String> {
     Ok(stderr)
 }
 
+/// 编译并运行 EOL 文件，期望执行失败（用于运行时错误测试），返回错误信息
+fn compile_and_run_expect_error(source_path: &str) -> Result<String, String> {
+    let exe_path = source_path.replace(".cay", ".exe");
+    let ir_path = source_path.replace(".cay", ".ll");
+
+    // 1. 编译 EOL -> EXE (使用 release 版本)
+    let output = Command::new("./target/release/cayc.exe")
+        .args(&[source_path, &exe_path])
+        .output()
+        .map_err(|e| format!("Failed to execute cayc: {}", e))?;
+
+    if !output.status.success() {
+        // 编译失败也返回错误信息
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let _ = fs::remove_file(&exe_path);
+        let _ = fs::remove_file(&ir_path);
+        return Ok(stderr);
+    }
+
+    // 2. 运行生成的 EXE
+    let output = Command::new(&exe_path)
+        .output()
+        .map_err(|e| format!("Failed to execute {}: {}", exe_path, e))?;
+
+    // 3. 清理生成的文件
+    let _ = fs::remove_file(&exe_path);
+    let _ = fs::remove_file(&ir_path);
+
+    // 如果执行失败（非零退出码），返回错误信息
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        // 合并 stdout 和 stderr，因为错误信息可能输出到 stdout
+        let combined = format!("{} {}", stdout, stderr);
+        return Ok(format!("runtime error: {}", combined));
+    }
+
+    Err("Expected execution to fail, but it succeeded".to_string())
+}
+
 #[test]
 fn test_hello_example() {
     let output = compile_and_run_eol("examples/hello.cay").expect("hello.cay should compile and run");
@@ -1683,7 +1723,7 @@ fn test_error_array_negative_size() {
 
 #[test]
 fn test_error_division_by_zero() {
-    let error = compile_eol_expect_error("examples/errors/error_division_by_zero.cay")
+    let error = compile_and_run_expect_error("examples/errors/error_division_by_zero.cay")
         .expect("division by zero should fail to compile or run");
     assert!(
         error.contains("zero") || error.contains("divide") || error.contains("runtime"),
@@ -1694,7 +1734,7 @@ fn test_error_division_by_zero() {
 
 #[test]
 fn test_error_modulo_by_zero() {
-    let error = compile_eol_expect_error("examples/errors/error_modulo_by_zero.cay")
+    let error = compile_and_run_expect_error("examples/errors/error_modulo_by_zero.cay")
         .expect("modulo by zero should fail to compile or run");
     assert!(
         error.contains("zero") || error.contains("modulo") || error.contains("remainder"),

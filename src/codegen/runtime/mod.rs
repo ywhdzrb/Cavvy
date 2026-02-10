@@ -30,6 +30,7 @@ impl IRGenerator {
         self.emit_raw("declare void @SetConsoleOutputCP(i32)");
         self.emit_raw("declare i64 @strlen(i8*)");
         self.emit_raw("declare i8* @calloc(i64, i64)");
+        self.emit_raw("declare void @exit(i32)");
         self.emit_raw("declare void @llvm.memcpy.p0i8.p0i8.i64(i8* noalias nocapture writeonly, i8* noalias nocapture readonly, i64, i1 immarg)");
         self.emit_raw("declare i32 @snprintf(i8*, i64, i8*, ...)");
         self.emit_raw("@.str.float_fmt = private unnamed_addr constant [3 x i8] c\"%f\\00\", align 1");

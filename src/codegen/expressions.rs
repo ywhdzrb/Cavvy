@@ -2070,6 +2070,117 @@ impl IRGenerator {
         Ok(format!("{}* {}", elem_llvm_type, cast_temp))
     }
 
+    /// 生成数组初始化表达式代码，使用指定的目标类型: {1, 2, 3}
+    /// 内存布局: [长度:i32][填充:i32][元素0][元素1]...[元素N-1]
+    pub fn generate_array_init_with_type(&mut self, init: &ArrayInitExpr, target_type: &Type) -> cayResult<String> {
+        if init.elements.is_empty() {
+            return Err(codegen_error("Cannot generate code for empty array initializer".to_string()));
+        }
+
+        // 从目标类型获取元素类型
+        let elem_llvm_type = if let Type::Array(elem_type) = target_type {
+            self.type_to_llvm(elem_type)
+        } else {
+            // 如果目标类型不是数组，使用第一个元素的类型
+            let first_elem = self.generate_expression(&init.elements[0])?;
+            let (elem_type, _) = self.parse_typed_value(&first_elem);
+            elem_type
+        };
+
+        // 获取元素大小
+        let elem_size = match elem_llvm_type.as_str() {
+            "i1" => 1,
+            "i8" => 1,
+            "i32" => 4,
+            "i64" => 8,
+            "float" => 4,
+            "double" => 8,
+            _ => 8, // 指针类型
+        };
+
+        let num_elements = init.elements.len() as i64;
+
+        // 计算数据字节数
+        let data_bytes = num_elements * elem_size;
+        // 额外分配 8 字节用于存储长度
+        let total_bytes = data_bytes + 8;
+
+        // 分配内存（使用 calloc 自动零初始化）
+        let calloc_temp = self.new_temp();
+        self.emit_line(&format!("  {} = call i8* @calloc(i64 1, i64 {})", calloc_temp, total_bytes));
+
+        // 存储长度（前4字节）- calloc 已零初始化，只需设置长度
+        let len_ptr = self.new_temp();
+        self.emit_line(&format!("  {} = bitcast i8* {} to i32*", len_ptr, calloc_temp));
+        self.emit_line(&format!("  store i32 {}, i32* {}, align 4", num_elements, len_ptr));
+
+        // 计算数据起始地址（跳过8字节长度头）
+        let data_ptr = self.new_temp();
+        self.emit_line(&format!("  {} = getelementptr i8, i8* {}, i64 8", data_ptr, calloc_temp));
+
+        // 转换为元素类型指针
+        let cast_temp = self.new_temp();
+        self.emit_line(&format!("  {} = bitcast i8* {} to {}*", cast_temp, data_ptr, elem_llvm_type));
+
+        // 存储每个元素
+        for (i, elem) in init.elements.iter().enumerate() {
+            let elem_val = self.generate_expression(elem)?;
+            let (elem_value_type, val) = self.parse_typed_value(&elem_val);
+
+            // 如果需要，进行类型转换
+            let final_val = if elem_value_type != elem_llvm_type {
+                let temp = self.new_temp();
+                // 整数到浮点数转换
+                if elem_value_type.starts_with("i") && (elem_llvm_type == "float" || elem_llvm_type == "double") {
+                    self.emit_line(&format!("  {} = sitofp {} {} to {}",
+                        temp, elem_value_type, val, elem_llvm_type));
+                }
+                // 浮点数到整数转换
+                else if (elem_value_type == "float" || elem_value_type == "double") && elem_llvm_type.starts_with("i") {
+                    self.emit_line(&format!("  {} = fptosi {} {} to {}",
+                        temp, elem_value_type, val, elem_llvm_type));
+                }
+                // 浮点数类型转换
+                else if elem_value_type == "double" && elem_llvm_type == "float" {
+                    self.emit_line(&format!("  {} = fptrunc double {} to float", temp, val));
+                }
+                else if elem_value_type == "float" && elem_llvm_type == "double" {
+                    self.emit_line(&format!("  {} = fpext float {} to double", temp, val));
+                }
+                // 整数类型转换
+                else if elem_value_type.starts_with("i") && elem_llvm_type.starts_with("i") {
+                    let from_bits: u32 = elem_value_type.trim_start_matches('i').parse().unwrap_or(64);
+                    let to_bits: u32 = elem_llvm_type.trim_start_matches('i').parse().unwrap_or(64);
+                    if to_bits > from_bits {
+                        self.emit_line(&format!("  {} = sext {} {} to {}",
+                            temp, elem_value_type, val, elem_llvm_type));
+                    } else {
+                        self.emit_line(&format!("  {} = trunc {} {} to {}",
+                            temp, elem_value_type, val, elem_llvm_type));
+                    }
+                }
+                else {
+                    // 无法转换，直接使用原值
+                    self.emit_line(&format!("  {} = add {} {}, 0", temp, elem_value_type, val));
+                }
+                temp
+            } else {
+                val.to_string()
+            };
+
+            // 获取元素地址
+            let elem_ptr = self.new_temp();
+            self.emit_line(&format!("  {} = getelementptr {}, {}* {}, i64 {}",
+                elem_ptr, elem_llvm_type, elem_llvm_type, cast_temp, i));
+
+            // 存储元素
+            self.emit_line(&format!("  store {} {}, {}* {}", elem_llvm_type, final_val, elem_llvm_type, elem_ptr));
+        }
+
+        // 返回数组指针（指向数据，长度在指针前8字节）
+        Ok(format!("{}* {}", elem_llvm_type, cast_temp))
+    }
+
     /// 生成方法引用表达式代码
     /// 方法引用: ClassName::methodName 或 obj::methodName
     fn generate_method_ref(&mut self, method_ref: &MethodRefExpr) -> cayResult<String> {

@@ -141,18 +141,85 @@ impl IRGenerator {
             return;
         }
 
-        self.emit_raw("; 静态字段声明（零初始化）");
+        self.emit_raw("; 静态字段声明");
         // 克隆字段列表以避免借用问题
         let fields: Vec<_> = self.static_fields.clone();
         for field in fields {
             let align = self.get_type_align(&field.llvm_type);
-            // 使用 zeroinitializer 实现零初始化
-            self.emit_raw(&format!(
-                "{} = private global {} zeroinitializer, align {}",
-                field.name, field.llvm_type, align
-            ));
+            
+            // 检查是否有初始值（基本类型）
+            let init_value = if let Some(init) = &field.initializer {
+                // 尝试计算常量初始值
+                self.evaluate_const_initializer(init, &field.llvm_type)
+            } else {
+                None
+            };
+            
+            if let Some(val) = init_value {
+                // 使用具体的初始值
+                self.emit_raw(&format!(
+                    "{} = private global {} {}, align {}",
+                    field.name, field.llvm_type, val, align
+                ));
+            } else {
+                // 使用 zeroinitializer 实现零初始化
+                self.emit_raw(&format!(
+                    "{} = private global {} zeroinitializer, align {}",
+                    field.name, field.llvm_type, align
+                ));
+            }
         }
         self.emit_raw("");
+    }
+    
+    /// 评估常量初始化表达式的值
+    fn evaluate_const_initializer(&self, expr: &Expr, llvm_type: &str) -> Option<String> {
+        match expr {
+            Expr::Literal(crate::ast::LiteralValue::Int32(n)) => Some(n.to_string()),
+            Expr::Literal(crate::ast::LiteralValue::Int64(n)) => Some(n.to_string()),
+            Expr::Literal(crate::ast::LiteralValue::Float32(f)) => {
+                // LLVM float 常量格式
+                if f.is_nan() {
+                    Some("0x7FC00000".to_string())
+                } else if f.is_infinite() {
+                    if *f > 0.0 {
+                        Some("0x7F800000".to_string())
+                    } else {
+                        Some("0xFF800000".to_string())
+                    }
+                } else {
+                    Some(format!("{:.6e}", f))
+                }
+            }
+            Expr::Literal(crate::ast::LiteralValue::Float64(f)) => {
+                // LLVM double 常量格式
+                if f.is_nan() {
+                    Some("0x7FF8000000000000".to_string())
+                } else if f.is_infinite() {
+                    if *f > 0.0 {
+                        Some("0x7FF0000000000000".to_string())
+                    } else {
+                        Some("0xFFF0000000000000".to_string())
+                    }
+                } else {
+                    Some(format!("{:.6e}", f))
+                }
+            }
+            Expr::Literal(crate::ast::LiteralValue::Bool(b)) => Some(if *b { "1".to_string() } else { "0".to_string() }),
+            Expr::Binary(binary) => {
+                let left = self.evaluate_const_int(&binary.left)?;
+                let right = self.evaluate_const_int(&binary.right)?;
+                let result = match binary.op {
+                    crate::ast::BinaryOp::Add => left + right,
+                    crate::ast::BinaryOp::Sub => left - right,
+                    crate::ast::BinaryOp::Mul => left * right,
+                    crate::ast::BinaryOp::Div => if right != 0 { left / right } else { return None },
+                    _ => return None,
+                };
+                Some(result.to_string())
+            }
+            _ => None,
+        }
     }
 
     /// 生成静态数组字段的初始化代码（在 main 函数中调用）

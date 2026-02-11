@@ -1,5 +1,6 @@
 *.exe
 *.ll
+*.cay
 *.eol
 
 !/examples/
@@ -11,6 +12,8 @@
 !/llvm-minimal/bin/*.exe
 !/examples/*.eol
 !/examples/errors/*.eol
+!/examples/*.cay
+!/examples/errors/*.cay
 
 .trae/
 /*.cpp

@@ -1,0 +1,16 @@
+// 测试基本继承功能 - 0.4.0.x
+// 测试单继承模型：class Child extends Parent
+
+public class Animal {
+    public static void speak() {
+        println("Animal speaks");
+    }
+}
+
+public class Dog extends Animal {
+    public static void main() {
+        // 测试继承的方法
+        Dog.speak();
+        println("Dog inherits from Animal");
+    }
+}

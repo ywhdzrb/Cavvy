@@ -1,8 +1,8 @@
-//! 类定义和主类冲突分析
+//! 类定义、继承关系分析和主类冲突分析
 
-use crate::ast::{Program, ClassMember, Modifier};
-use crate::types::{ClassInfo, FieldInfo, MethodInfo, ParameterInfo};
-use crate::error::cayResult;
+use crate::ast::{Program, ClassMember, Modifier, MethodDecl};
+use crate::types::{ClassInfo, FieldInfo, MethodInfo, ParameterInfo, Type};
+use crate::error::{cayResult, semantic_error};
 use super::analyzer::SemanticAnalyzer;
 
 impl SemanticAnalyzer {
@@ -104,6 +104,8 @@ impl SemanticAnalyzer {
                         name: field.name.clone(),
                         field_type: field.field_type.clone(),
                         is_public: field.modifiers.contains(&Modifier::Public),
+                        is_private: field.modifiers.contains(&Modifier::Private),
+                        is_protected: field.modifiers.contains(&Modifier::Protected),
                         is_static: field.modifiers.contains(&Modifier::Static),
                     };
                     class_info.fields.insert(field.name.clone(), field_info);
@@ -128,8 +130,11 @@ impl SemanticAnalyzer {
                         params: method.params.clone(),
                         return_type: method.return_type.clone(),
                         is_public: method.modifiers.contains(&Modifier::Public),
+                        is_private: method.modifiers.contains(&Modifier::Private),
+                        is_protected: method.modifiers.contains(&Modifier::Protected),
                         is_static: method.modifiers.contains(&Modifier::Static),
                         is_native: method.modifiers.contains(&Modifier::Native),
+                        is_override: method.modifiers.contains(&Modifier::Override),
                     };
 
                     if let Some(class_info) = self.type_registry.classes.get_mut(&class.name) {
@@ -139,5 +144,126 @@ impl SemanticAnalyzer {
             }
         }
         Ok(())
+    }
+
+    /// 检查继承关系
+    /// 1. 验证父类是否存在
+    /// 2. 检测循环继承
+    /// 3. 验证 @Override 注解
+    pub fn check_inheritance(&mut self, program: &Program) -> cayResult<()> {
+        // 第一遍：验证所有父类存在
+        for class in &program.classes {
+            if let Some(ref parent_name) = class.parent {
+                if !self.type_registry.class_exists(parent_name) {
+                    return Err(semantic_error(
+                        class.loc.line,
+                        class.loc.column,
+                        format!("Class '{}' extends undefined class '{}'", class.name, parent_name)
+                    ));
+                }
+            }
+        }
+
+        // 第二遍：检测循环继承
+        for class in &program.classes {
+            self.check_circular_inheritance(&class.name, &class.name, &mut Vec::new())?;
+        }
+
+        // 第三遍：验证 @Override 注解
+        for class in &program.classes {
+            self.check_override_methods(class)?;
+        }
+
+        Ok(())
+    }
+
+    /// 递归检查循环继承
+    fn check_circular_inheritance(&self, original: &str, current: &str, visited: &mut Vec<String>) -> cayResult<()> {
+        if visited.contains(&current.to_string()) {
+            return Err(semantic_error(
+                0, 0,
+                format!("Circular inheritance detected involving class '{}'", original)
+            ));
+        }
+
+        if let Some(class_info) = self.type_registry.get_class(current) {
+            if let Some(ref parent_name) = class_info.parent {
+                visited.push(current.to_string());
+                self.check_circular_inheritance(original, parent_name, visited)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 检查 @Override 注解的方法
+    fn check_override_methods(&self, class: &crate::ast::ClassDecl) -> cayResult<()> {
+        for member in &class.members {
+            if let ClassMember::Method(method) = member {
+                if method.modifiers.contains(&Modifier::Override) {
+                    // 检查父类是否存在
+                    let parent_name = match &class.parent {
+                        Some(p) => p,
+                        None => {
+                            return Err(semantic_error(
+                                method.loc.line,
+                                method.loc.column,
+                                format!("Method '{}' has @Override annotation but class '{}' does not extend any class", 
+                                    method.name, class.name)
+                            ));
+                        }
+                    };
+
+                    // 检查父类中是否存在同名方法
+                    if !self.method_exists_in_parent(parent_name, &method.name, &method.params, &method.return_type) {
+                        return Err(semantic_error(
+                            method.loc.line,
+                            method.loc.column,
+                            format!("Method '{}' has @Override annotation but does not override any method from parent class '{}'",
+                                method.name, parent_name)
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 检查父类中是否存在匹配的方法
+    fn method_exists_in_parent(&self, parent_name: &str, method_name: &str, params: &[ParameterInfo], return_type: &Type) -> bool {
+        if let Some(parent_class) = self.type_registry.get_class(parent_name) {
+            // 获取参数类型列表
+            let param_types: Vec<Type> = params.iter().map(|p| p.param_type.clone()).collect();
+
+            // 在父类中查找方法
+            if let Some(methods) = parent_class.methods.get(method_name) {
+                for method in methods {
+                    // 检查参数数量和类型是否匹配
+                    if method.params.len() == params.len() {
+                        let parent_param_types: Vec<Type> = method.params.iter().map(|p| p.param_type.clone()).collect();
+                        if self.types_match(&parent_param_types, &param_types) && method.return_type == *return_type {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // 递归检查父类的父类
+            if let Some(ref grandparent) = parent_class.parent {
+                return self.method_exists_in_parent(grandparent, method_name, params, return_type);
+            }
+        }
+
+        false
+    }
+
+    /// 检查类型列表是否匹配
+    fn types_match(&self, types1: &[Type], types2: &[Type]) -> bool {
+        if types1.len() != types2.len() {
+            return false;
+        }
+
+        types1.iter().zip(types2.iter()).all(|(t1, t2)| t1 == t2)
     }
 }

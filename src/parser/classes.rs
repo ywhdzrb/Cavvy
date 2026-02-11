@@ -37,8 +37,12 @@ pub fn parse_class(parser: &mut Parser) -> cayResult<ClassDecl> {
     
     let name = parser.consume_identifier("Expected class name")?;
     
-    let parent = if parser.match_token(&Token::Colon) {
-        Some(parser.consume_identifier("Expected parent class name")?)
+    // 支持 extends 关键字或 : 符号作为继承语法
+    let parent = if parser.match_token(&Token::Extends) {
+        Some(parser.consume_identifier("Expected parent class name after 'extends'")?)
+    } else if parser.match_token(&Token::Colon) {
+        // 保留 : 符号作为兼容语法
+        Some(parser.consume_identifier("Expected parent class name after ':'")?)
     } else {
         None
     };
@@ -155,7 +159,7 @@ pub fn parse_method(parser: &mut Parser) -> cayResult<MethodDecl> {
     })
 }
 
-/// 解析修饰符列表
+/// 解析修饰符列表（包括注解）
 pub fn parse_modifiers(parser: &mut Parser) -> cayResult<Vec<Modifier>> {
     let mut modifiers = Vec::new();
     
@@ -187,6 +191,10 @@ pub fn parse_modifiers(parser: &mut Parser) -> cayResult<Vec<Modifier>> {
             }
             Token::Native => {
                 modifiers.push(Modifier::Native);
+                parser.advance();
+            }
+            Token::Override => {
+                modifiers.push(Modifier::Override);
                 parser.advance();
             }
             _ => break,

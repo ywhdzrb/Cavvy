@@ -45,7 +45,10 @@ impl SemanticAnalyzer {
         // 第二遍：分析方法定义
         self.analyze_methods(program)?;
 
-        // 第三遍：类型检查
+        // 第三遍：检查继承关系（包括 @Override 验证）
+        self.check_inheritance(program)?;
+
+        // 第四遍：类型检查
         self.type_check_program(program)?;
 
         if !self.errors.is_empty() {

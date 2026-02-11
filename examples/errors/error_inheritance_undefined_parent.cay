@@ -1,0 +1,8 @@
+// 错误：继承不存在的父类
+// 应该报错：Class 'Child' extends undefined class 'NonExistent'
+
+public class Child extends NonExistent {
+    public static void main() {
+        println("This should not compile");
+    }
+}

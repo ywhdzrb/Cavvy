@@ -1,0 +1,39 @@
+// 测试访问控制 - 0.4.0.x
+// public, private, protected
+
+public class Base {
+    // 公有方法
+    public static void publicMethod() {
+        println("Public method");
+    }
+    
+    // 受保护方法
+    protected static void protectedMethod() {
+        println("Protected method");
+    }
+    
+    // 私有方法
+    private static void privateMethod() {
+        println("Private method");
+    }
+    
+    public static void testAccess() {
+        // 类内部可以访问所有方法
+        publicMethod();
+        protectedMethod();
+        privateMethod();
+    }
+}
+
+public class Derived extends Base {
+    public static void main() {
+        // 可以访问 public 和 protected
+        Base.publicMethod();
+        Base.protectedMethod();
+        
+        // 测试基类内部访问
+        Base.testAccess();
+        
+        println("Access control test passed");
+    }
+}

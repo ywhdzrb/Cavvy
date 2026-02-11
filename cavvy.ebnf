@@ -58,7 +58,10 @@ endif_directive = "#endif";
 
 program = { preprocessor_directive | class_declaration };
 
-class_declaration = [ annotation ], [ modifiers ], "class", identifier, [ ":", identifier ], "{", { class_member }, "}";
+class_declaration = [ annotation ], [ modifiers ], "class", identifier, [ inheritance ], "{", { class_member }, "}";
+
+(* 继承声明 - 支持 extends 关键字或 : 符号 *)
+inheritance = "extends", identifier | ":", identifier;
 
 (* 主类注解 - 用于显式指定程序入口类 *)
 annotation = "@", identifier;
@@ -78,7 +81,7 @@ class_member = field_declaration | method_declaration;
 
 modifiers = modifier, { modifier };
 
-modifier = "public" | "private" | "protected" | "static" | "final" | "abstract" | "native";
+modifier = "public" | "private" | "protected" | "static" | "final" | "abstract" | "native" | "Override";
 
 (* ============================================================================
  * 字段声明（支持静态字段）

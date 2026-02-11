@@ -1,0 +1,19 @@
+// 错误：@Override 标记的方法在父类中不存在
+// 应该报错：Method 'nonExistentMethod' has @Override annotation but does not override any method from parent class 'Parent'
+
+public class Parent {
+    public static void existingMethod() {
+        println("Parent method");
+    }
+}
+
+public class Child extends Parent {
+    Override
+    public static void nonExistentMethod() {
+        println("This method doesn't exist in parent");
+    }
+    
+    public static void main() {
+        Child.nonExistentMethod();
+    }
+}

@@ -78,6 +78,10 @@ pub enum Token {
     This,
     #[token("super")]
     Super,
+    #[token("extends")]
+    Extends,
+    #[token("Override")]
+    Override,
     
     // 标识符
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]

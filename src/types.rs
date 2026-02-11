@@ -119,8 +119,11 @@ pub struct MethodInfo {
     pub params: Vec<ParameterInfo>,
     pub return_type: Type,
     pub is_public: bool,
+    pub is_private: bool,
+    pub is_protected: bool,
     pub is_static: bool,
     pub is_native: bool,
+    pub is_override: bool,  // 标记是否是重写方法
 }
 
 #[derive(Debug, Clone)]
@@ -128,6 +131,8 @@ pub struct FieldInfo {
     pub name: String,
     pub field_type: Type,
     pub is_public: bool,
+    pub is_private: bool,
+    pub is_protected: bool,
     pub is_static: bool,
 }
 
@@ -249,14 +254,37 @@ impl TypeRegistry {
         self.classes.get(name)
     }
 
-    /// 根据类名和方法名获取方法（获取第一个匹配的方法，用于无参数类型信息的情况）
+    /// 根据类名和方法名获取方法（获取第一个匹配的方法，用于无参数类型信息的情况，支持继承）
     pub fn get_method(&self, class_name: &str, method_name: &str) -> Option<&MethodInfo> {
-        self.classes.get(class_name)
-            .and_then(|c| c.find_method_by_name(method_name))
+        if let Some(class_info) = self.classes.get(class_name) {
+            if let Some(method) = class_info.find_method_by_name(method_name) {
+                return Some(method);
+            }
+            // 如果在当前类中没找到，递归在父类中查找
+            if let Some(ref parent_name) = class_info.parent {
+                return self.get_method(parent_name, method_name);
+            }
+        }
+        None
     }
 
-    /// 根据类名、方法名和参数类型查找方法（支持重载）
+    /// 根据类名、方法名和参数类型查找方法（支持重载和继承）
     pub fn find_method(&self, class_name: &str, method_name: &str, arg_types: &[Type]) -> Option<&MethodInfo> {
+        // 首先在当前类中查找
+        if let Some(class_info) = self.classes.get(class_name) {
+            if let Some(method) = class_info.find_method(method_name, arg_types) {
+                return Some(method);
+            }
+            // 如果在当前类中没找到，递归在父类中查找
+            if let Some(ref parent_name) = class_info.parent {
+                return self.find_method(parent_name, method_name, arg_types);
+            }
+        }
+        None
+    }
+
+    /// 根据类名、方法名和参数类型查找方法，只在当前类中查找（不递归父类）
+    pub fn find_method_in_class(&self, class_name: &str, method_name: &str, arg_types: &[Type]) -> Option<&MethodInfo> {
         self.classes.get(class_name)
             .and_then(|c| c.find_method(method_name, arg_types))
     }

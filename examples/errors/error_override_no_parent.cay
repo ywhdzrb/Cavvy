@@ -1,0 +1,13 @@
+// 错误：没有父类但使用 @Override
+// 应该报错：Method 'foo' has @Override annotation but class 'Orphan' does not extend any class
+
+public class Orphan {
+    Override
+    public static void foo() {
+        println("This should not compile");
+    }
+    
+    public static void main() {
+        Orphan.foo();
+    }
+}

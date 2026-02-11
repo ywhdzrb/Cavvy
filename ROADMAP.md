@@ -106,10 +106,10 @@ EOL (Ethernos Object Language) 是一个始终编译为原生机器码的静态�
 **目标**：建立完整的 OOP 语义，支持典型的系统级抽象（如设备驱动框架、资源管理器）。
 
 #### 0.4.0.x 基础继承体系（基础里程碑）
-- [ ] **单继承模型** - `class Child extends Parent`，严格单继承避免菱形继承复杂性
-- [ ] **虚函数表（vtable）布局** - 确定 C++ 兼容的 vtable 结构，支持后续 FFI
-- [ ] **方法重写与隐藏** - `@Override` 编译期检查，默认虚函数（非 Java 的默认 final）
-- [ ] **访问控制基础** - `public/private/protected`，其中 `protected` 允许包内访问（同 Java）
+- [x] **单继承模型** - `class Child extends Parent`，严格单继承避免菱形继承复杂性
+- [x] **虚函数表（vtable）布局** - 确定 C++ 兼容的 vtable 结构，支持后续 FFI
+- [x] **方法重写与隐藏** - `@Override` 编译期检查，默认虚函数（非 Java 的默认 final）
+- [x] **访问控制基础** - `public/private/protected`，其中 `protected` 允许包内访问（同 Java）
 
 #### 0.4.1.x 多态与抽象（设计模式支持）
 - [ ] **动态分派** - 通过 vtable 实现运行时多态，确保零开销（不采用 fat pointer）

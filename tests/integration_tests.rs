@@ -1883,3 +1883,59 @@ fn test_reverse_number() {
     assert!(output.contains("54321") && output.contains("6789"),
             "Reverse number should work, got: {}", output);
 }
+
+// ==================== 0.4.0.x 继承体系测试 ====================
+
+#[test]
+fn test_inheritance_basic() {
+    let output = compile_and_run_eol("examples/test_inheritance_basic.cay").expect("inheritance basic should compile and run");
+    assert!(output.contains("Animal speaks") && output.contains("Dog inherits from Animal"),
+            "Basic inheritance should work, got: {}", output);
+}
+
+#[test]
+fn test_override_annotation() {
+    let output = compile_and_run_eol("examples/test_override_annotation.cay").expect("override annotation should compile and run");
+    assert!(output.contains("Drawing a circle") && output.contains("Area:"),
+            "Override annotation should work, got: {}", output);
+}
+
+#[test]
+fn test_access_control() {
+    let output = compile_and_run_eol("examples/test_access_control.cay").expect("access control should compile and run");
+    assert!(output.contains("Public method") && output.contains("Protected method"),
+            "Access control should work, got: {}", output);
+}
+
+#[test]
+fn test_error_inheritance_undefined_parent() {
+    let error = compile_eol_expect_error("examples/errors/error_inheritance_undefined_parent.cay")
+        .expect("undefined parent class should fail to compile");
+    assert!(
+        error.contains("extends") || error.contains("undefined") || error.contains("not found"),
+        "Should report undefined parent class error, got: {}",
+        error
+    );
+}
+
+#[test]
+fn test_error_override_no_parent() {
+    let error = compile_eol_expect_error("examples/errors/error_override_no_parent.cay")
+        .expect("override without parent should fail to compile");
+    assert!(
+        error.contains("Override") || error.contains("parent") || error.contains("extend"),
+        "Should report override without parent error, got: {}",
+        error
+    );
+}
+
+#[test]
+fn test_error_override_not_exist() {
+    let error = compile_eol_expect_error("examples/errors/error_override_not_exist.cay")
+        .expect("override non-existent method should fail to compile");
+    assert!(
+        error.contains("Override") || error.contains("override") || error.contains("not exist"),
+        "Should report override non-existent method error, got: {}",
+        error
+    );
+}

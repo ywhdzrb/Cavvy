@@ -1,0 +1,5 @@
+// 循环包含 C -> A (形成循环)
+
+#include "error_cycle_a.cay"
+
+#define CYCLE_C 3

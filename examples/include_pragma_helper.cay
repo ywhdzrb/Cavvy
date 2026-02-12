@@ -1,0 +1,9 @@
+// 用于测试 #pragma once 的辅助文件
+
+#define PRAGMA_VALUE 42
+
+class PragmaHelper {
+    public static int getValue() {
+        return PRAGMA_VALUE;
+    }
+}

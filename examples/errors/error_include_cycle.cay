@@ -1,0 +1,11 @@
+// 测试循环包含检测
+// 这个文件应该导致编译错误
+
+#include "error_cycle_a.cay"
+
+@main
+public class ErrorIncludeCycle {
+    public static void main() {
+        println("This should not compile!");
+    }
+}

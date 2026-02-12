@@ -437,7 +437,7 @@ fn main() {
     };
 
     let compiler = Compiler::new();
-    match compiler.compile(&source, &ir_file) {
+    match compiler.compile_file(&source_path, &ir_file) {
         Ok(_) => {
             println!("  [+] Cavvy 编译成功");
         }

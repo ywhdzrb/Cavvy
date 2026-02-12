@@ -1,0 +1,27 @@
+// 测试 #include 基本功能
+// 版本: 0.3.5.0
+
+#include "include_helper.cay"
+
+@main
+public class TestIncludeBasic {
+    public static void main() {
+        // 使用包含文件中定义的常量
+        int version_major = VERSION_MAJOR;
+        int version_minor = VERSION_MINOR;
+        
+        // 打印版本信息
+        println("Version test");
+        
+        // 使用包含文件中的工具方法
+        int result = Helper.add(10, 20);
+        println("Addition test");
+        
+        // 验证结果
+        if (result == 30) {
+            println("Include test PASSED!");
+        } else {
+            println("Include test FAILED!");
+        }
+    }
+}

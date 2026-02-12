@@ -1,0 +1,6 @@
+// 嵌套包含文件 B
+// 包含 C
+
+#define VALUE_B 2
+
+#include "include_nested_c.cay"

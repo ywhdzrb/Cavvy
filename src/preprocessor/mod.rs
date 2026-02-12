@@ -29,6 +29,10 @@ pub struct Preprocessor {
     conditional_stack: Vec<ConditionalState>,
     /// 是否处于被跳过的代码块中
     skipping: bool,
+    /// 包含栈（用于循环包含检测和错误报告）
+    include_stack: Vec<String>,
+    /// 系统包含路径列表
+    system_include_paths: Vec<PathBuf>,
 }
 
 /// 条件编译状态
@@ -74,6 +78,28 @@ impl Preprocessor {
             base_dir: base_dir.as_ref().to_path_buf(),
             conditional_stack: Vec::new(),
             skipping: false,
+            include_stack: Vec::new(),
+            system_include_paths: Vec::new(),
+        }
+    }
+
+    /// 创建带有系统包含路径的预处理器实例
+    /// 
+    /// # Arguments
+    /// * `base_dir` - 源代码基础目录
+    /// * `system_paths` - 系统包含路径列表
+    /// 
+    /// # Returns
+    /// 初始化后的预处理器
+    pub fn with_system_paths(base_dir: impl AsRef<Path>, system_paths: Vec<PathBuf>) -> Self {
+        Self {
+            defines: HashMap::new(),
+            included_files: HashSet::new(),
+            base_dir: base_dir.as_ref().to_path_buf(),
+            conditional_stack: Vec::new(),
+            skipping: false,
+            include_stack: Vec::new(),
+            system_include_paths: system_paths,
         }
     }
 
@@ -89,6 +115,19 @@ impl Preprocessor {
     /// # Errors
     /// 当遇到无效指令或文件无法读取时返回错误
     pub fn process(&mut self, source: &str, file_path: &str) -> cayResult<String> {
+        // 将当前文件压入包含栈
+        self.include_stack.push(file_path.to_string());
+        
+        let result = self.process_internal(source, file_path);
+        
+        // 弹出当前文件
+        self.include_stack.pop();
+        
+        result
+    }
+
+    /// 内部处理函数
+    fn process_internal(&mut self, source: &str, file_path: &str) -> cayResult<String> {
         let lines: Vec<&str> = source.lines().collect();
         let mut output_lines = Vec::new();
         
@@ -356,14 +395,7 @@ impl Preprocessor {
         current_file: &str,
     ) -> cayResult<()> {
         // 解析完整路径
-        let include_path = if Path::new(path).is_absolute() {
-            PathBuf::from(path)
-        } else {
-            // 相对于当前文件目录解析
-            let current_dir = Path::new(current_file).parent()
-                .unwrap_or(&self.base_dir);
-            current_dir.join(path)
-        };
+        let include_path = self.resolve_include_path(path, current_file)?;
         
         // 标准化路径用于去重检查
         let canonical_path = include_path.canonicalize()
@@ -372,6 +404,17 @@ impl Preprocessor {
             ))?;
         
         let path_key = canonical_path.to_string_lossy().to_string();
+        
+        // 检查循环包含
+        if self.include_stack.contains(&path_key) {
+            let chain = self.include_stack.join(" -> ");
+            return Err(cayError::Preprocessor {
+                line: 0,
+                column: 0,
+                message: format!("检测到循环包含: {}", path_key),
+                suggestion: format!("包含链: {} -> {}", chain, path_key),
+            });
+        }
         
         // 隐式 #pragma once: 检查是否已包含
         if self.included_files.contains(&path_key) {
@@ -397,6 +440,52 @@ impl Preprocessor {
         output_lines.push(format!("// #line end {:?}", sub_path));
         
         Ok(())
+    }
+
+    /// 解析包含路径
+    /// 
+    /// 搜索顺序：
+    /// 1. 如果是绝对路径，直接使用
+    /// 2. 相对于当前文件目录
+    /// 3. 相对于基础目录
+    /// 4. 系统包含路径
+    fn resolve_include_path(&self, path: &str, current_file: &str) -> cayResult<PathBuf> {
+        // 1. 绝对路径
+        if Path::new(path).is_absolute() {
+            return Ok(PathBuf::from(path));
+        }
+        
+        // 2. 相对于当前文件目录
+        if let Some(current_dir) = Path::new(current_file).parent() {
+            let relative_path = current_dir.join(path);
+            if relative_path.exists() {
+                return Ok(relative_path);
+            }
+        }
+        
+        // 3. 相对于基础目录
+        let base_path = self.base_dir.join(path);
+        if base_path.exists() {
+            return Ok(base_path);
+        }
+        
+        // 4. 系统包含路径
+        for sys_path in &self.system_include_paths {
+            let sys_include_path = sys_path.join(path);
+            if sys_include_path.exists() {
+                return Ok(sys_include_path);
+            }
+        }
+        
+        // 如果都找不到，返回相对于当前文件的路径（让后续错误处理报告）
+        let current_dir = Path::new(current_file).parent()
+            .unwrap_or(&self.base_dir);
+        Ok(current_dir.join(path))
+    }
+
+    /// 获取当前包含栈（用于错误报告）
+    pub fn get_include_stack(&self) -> &[String] {
+        &self.include_stack
     }
 
     /// 压入条件编译状态
@@ -441,7 +530,7 @@ impl Preprocessor {
             // 简单的字符串替换
             // 注意：这不处理注释、字符串字面量等边界情况
             // 对于 0.3.5.0 版本，这是可接受的简化
-                    result = result.replace(name, value);
+            result = result.replace(name, value);
         }
         
         result
@@ -462,3 +551,22 @@ pub fn preprocess(source: &str, file_path: &str, base_dir: impl AsRef<Path>) -> 
     preprocessor.process(source, file_path)
 }
 
+/// 带系统包含路径的预处理函数
+/// 
+/// # Arguments
+/// * `source` - 原始源代码
+/// * `file_path` - 源文件路径
+/// * `base_dir` - 基础目录
+/// * `system_paths` - 系统包含路径列表
+/// 
+/// # Returns
+/// 预处理后的源代码
+pub fn preprocess_with_system_paths(
+    source: &str, 
+    file_path: &str, 
+    base_dir: impl AsRef<Path>,
+    system_paths: Vec<PathBuf>
+) -> cayResult<String> {
+    let mut preprocessor = Preprocessor::with_system_paths(base_dir, system_paths);
+    preprocessor.process(source, file_path)
+}

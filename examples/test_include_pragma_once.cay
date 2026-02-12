@@ -1,0 +1,21 @@
+// 测试 #pragma once 功能（隐式）
+// 版本: 0.3.5.0
+
+// 多次包含同一个文件应该只生效一次
+#include "include_pragma_helper.cay"
+#include "include_pragma_helper.cay"
+#include "include_pragma_helper.cay"
+
+@main
+public class TestIncludePragmaOnce {
+    public static void main() {
+        // 如果 #pragma once 不生效，PRAGMA_VALUE 会被重复定义导致错误
+        int value = PRAGMA_VALUE;
+        
+        if (value == 42) {
+            println("Pragma once test PASSED!");
+        } else {
+            println("Pragma once test FAILED!");
+        }
+    }
+}

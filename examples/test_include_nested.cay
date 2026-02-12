@@ -1,0 +1,21 @@
+// 测试嵌套 #include 功能
+// 版本: 0.3.5.0
+
+#include "include_nested_a.cay"
+
+@main
+public class TestIncludeNested {
+    public static void main() {
+        // 使用 A 中定义的常量（A 包含了 B，B 包含了 C）
+        int value_a = VALUE_A;
+        int value_b = VALUE_B;
+        int value_c = VALUE_C;
+        
+        // 验证所有值都正确
+        if (value_a == 1 && value_b == 2 && value_c == 3) {
+            println("Nested include test PASSED!");
+        } else {
+            println("Nested include test FAILED!");
+        }
+    }
+}

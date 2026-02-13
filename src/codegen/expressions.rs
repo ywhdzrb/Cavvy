@@ -1781,13 +1781,18 @@ impl IRGenerator {
         Ok(format!("i8* {}", val))
     }
 
-    /// 生成 new 表达式代码
-    fn generate_new_expression(&mut self, _new_expr: &NewExpr) -> cayResult<String> {
-        // 简化实现：为对象分配一块固定大小的内存（8字节），返回 i8* 指针
-        // 这对不依赖对象字段的示例（如 NestedCalls）是足够的
-        let size = 8i64;
+    fn generate_new_expression(&mut self, new_expr: &NewExpr) -> cayResult<String> {
+        let class_name = &new_expr.class_name;
+        let type_id = self.get_type_id(class_name).unwrap_or_else(|| format!("@__type_id_{}", class_name));
+
+        let size = 16i64;
         let calloc_temp = self.new_temp();
         self.emit_line(&format!("  {} = call i8* @calloc(i64 1, i64 {})", calloc_temp, size));
+
+        let type_id_ptr = self.new_temp();
+        self.emit_line(&format!("  {} = bitcast i8* {} to i8**", type_id_ptr, calloc_temp));
+        self.emit_line(&format!("  store i8* {}, i8** {}", type_id, type_id_ptr));
+
         let cast_temp = self.new_temp();
         self.emit_line(&format!("  {} = bitcast i8* {} to i8*", cast_temp, calloc_temp));
         Ok(format!("i8* {}", cast_temp))
@@ -2427,48 +2432,196 @@ impl IRGenerator {
         Ok(format!("{} {}", then_type, result_temp))
     }
 
-    /// 生成 instanceof 表达式代码
     fn generate_instanceof_expression(&mut self, instanceof: &crate::ast::InstanceOfExpr) -> cayResult<String> {
-        // 简化实现：instanceof 在编译期确定
-        // 对于 Cavvy 0.4.1.0，我们使用简化方案：
-        // 如果表达式是 null，返回 false
-        // 否则返回 true（假设类型正确，因为语义分析已经检查过）
-
         let expr_result = self.generate_expression(&instanceof.expr)?;
         let (expr_type, expr_val) = self.parse_typed_value(&expr_result);
 
-        // 创建标签
         let null_label = self.new_label("instanceof.null");
-        let nonnull_label = self.new_label("instanceof.nonnull");
+        let check_label = self.new_label("instanceof.check");
+        let true_label = self.new_label("instanceof.true");
+        let false_label = self.new_label("instanceof.false");
         let end_label = self.new_label("instanceof.end");
 
-        // 检查是否为 null
         let is_null = self.new_temp();
         if expr_type.ends_with("*") {
-            // 指针类型，与 null 比较
             self.emit_line(&format!("  {} = icmp eq {} {}, null", is_null, expr_type, expr_val));
         } else {
-            // 非指针类型，不可能是 null
             self.emit_line(&format!("  {} = icmp eq i1 0, 1", is_null));
         }
 
-        // 分支
-        self.emit_line(&format!("  br i1 {}, label %{}, label %{}", is_null, null_label, nonnull_label));
+        self.emit_line(&format!("  br i1 {}, label %{}, label %{}", is_null, null_label, check_label));
 
-        // null 分支：返回 false
         self.emit_line(&format!("\n{}:", null_label));
+        self.emit_line(&format!("  br label %{}", false_label));
+
+        self.emit_line(&format!("\n{}:", check_label));
+
+        let type_id_ptr = self.new_temp();
+        self.emit_line(&format!("  {} = bitcast {} {} to i8**", type_id_ptr, expr_type, expr_val));
+
+        let actual_type_id = self.new_temp();
+        self.emit_line(&format!("  {} = load i8*, i8** {}", actual_type_id, type_id_ptr));
+
+        let target_type = &instanceof.target_type;
+        let target_class = match target_type {
+            crate::types::Type::Object(name) => name.clone(),
+            _ => return Err(codegen_error("instanceof target must be an object type".to_string())),
+        };
+
+        // 检查目标类型是否是接口
+        let is_interface = self.type_registry.as_ref()
+            .map(|r| r.get_interface(&target_class).is_some())
+            .unwrap_or(false);
+
+        if is_interface {
+            // 对于接口类型检查，生成运行时检查代码
+            // 检查对象的类是否实现了该接口
+            self.generate_interface_check(&actual_type_id, &target_class, &true_label, &false_label)?;
+        } else {
+            // 对于类类型检查，生成继承链检查代码
+            self.generate_type_check(&actual_type_id, &target_class, &true_label, &false_label)?;
+        }
+
+        self.emit_line(&format!("\n{}:", true_label));
         self.emit_line(&format!("  br label %{}", end_label));
 
-        // 非 null 分支：返回 true（简化处理）
-        self.emit_line(&format!("\n{}:", nonnull_label));
+        self.emit_line(&format!("\n{}:", false_label));
         self.emit_line(&format!("  br label %{}", end_label));
 
-        // 合并点
         self.emit_line(&format!("\n{}:", end_label));
         let result_temp = self.new_temp();
-        self.emit_line(&format!("  {} = phi i1 [ 0, %{} ], [ 1, %{} ]",
-            result_temp, null_label, nonnull_label));
+        self.emit_line(&format!("  {} = phi i1 [ 1, %{} ], [ 0, %{} ]",
+            result_temp, true_label, false_label));
 
         Ok(format!("i1 {}", result_temp))
+    }
+
+    fn generate_type_check(&mut self, actual_type_id: &str, target_class: &str, true_label: &str, false_label: &str) -> cayResult<()> {
+        let target_type_id = self.get_type_id(target_class)
+            .unwrap_or_else(|| format!("@__type_id_{}", target_class));
+
+        let loop_label = self.new_label("typecheck.loop");
+        let check_match_label = self.new_label("typecheck.match");
+        let check_parent_label = self.new_label("typecheck.parent");
+        let continue_label = self.new_label("typecheck.cont");
+
+        let current_type_var = self.new_temp();
+        self.emit_line(&format!("  {} = alloca i8*", current_type_var));
+        self.emit_line(&format!("  store i8* {}, i8** {}", actual_type_id, current_type_var));
+
+        self.emit_line(&format!("  br label %{}", loop_label));
+
+        self.emit_line(&format!("\n{}:", loop_label));
+        let current_type = self.new_temp();
+        self.emit_line(&format!("  {} = load i8*, i8** {}", current_type, current_type_var));
+
+        let is_match = self.new_temp();
+        self.emit_line(&format!("  {} = icmp eq i8* {}, {}",
+            is_match, current_type, target_type_id));
+        self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+            is_match, true_label, check_parent_label));
+
+        self.emit_line(&format!("\n{}:", check_parent_label));
+
+        let parent_ptr = self.new_temp();
+        self.emit_line(&format!("  {} = bitcast i8* {} to i8**",
+            parent_ptr, current_type));
+
+        let parent_type = self.new_temp();
+        self.emit_line(&format!("  {} = load i8*, i8** {}",
+            parent_type, parent_ptr));
+
+        let has_parent = self.new_temp();
+        self.emit_line(&format!("  {} = icmp ne i8* {}, null",
+            has_parent, parent_type));
+        self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+            has_parent, continue_label, false_label));
+
+        self.emit_line(&format!("\n{}:", continue_label));
+        self.emit_line(&format!("  store i8* {}, i8** {}", parent_type, current_type_var));
+        self.emit_line(&format!("  br label %{}", loop_label));
+
+        Ok(())
+    }
+
+    fn generate_interface_check(&mut self, actual_type_id: &str, interface_name: &str, true_label: &str, false_label: &str) -> cayResult<()> {
+        // 获取所有实现了该接口的类
+        let implementing_classes: Vec<String> = if let Some(ref registry) = self.type_registry {
+            registry.classes.values()
+                .filter(|c| c.interfaces.contains(&interface_name.to_string()))
+                .map(|c| c.name.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        if implementing_classes.is_empty() {
+            // 如果没有类实现该接口，直接返回 false
+            self.emit_line(&format!("  br label %{}", false_label));
+            return Ok(());
+        }
+
+        // 为每个实现类生成检查
+        let loop_label = self.new_label("interface_check.loop");
+        let check_next_label = self.new_label("interface_check.next");
+
+        let current_type_var = self.new_temp();
+        self.emit_line(&format!("  {} = alloca i8*", current_type_var));
+        self.emit_line(&format!("  store i8* {}, i8** {}", actual_type_id, current_type_var));
+
+        self.emit_line(&format!("  br label %{}", loop_label));
+
+        self.emit_line(&format!("\n{}:", loop_label));
+        let current_type = self.new_temp();
+        self.emit_line(&format!("  {} = load i8*, i8** {}", current_type, current_type_var));
+
+        // 检查当前类型是否匹配任何一个实现类
+        let mut prev_label = loop_label.clone();
+        for (i, class_name) in implementing_classes.iter().enumerate() {
+            let class_type_id = self.get_type_id(class_name)
+                .unwrap_or_else(|| format!("@__type_id_{}", class_name));
+
+            let is_match = self.new_temp();
+            self.emit_line(&format!("  {} = icmp eq i8* {}, {}",
+                is_match, current_type, class_type_id));
+
+            let next_check_label = if i < implementing_classes.len() - 1 {
+                self.new_label(&format!("interface_check.class{}", i))
+            } else {
+                check_next_label.clone()
+            };
+
+            self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+                is_match, true_label, next_check_label));
+
+            if i < implementing_classes.len() - 1 {
+                self.emit_line(&format!("\n{}:", next_check_label));
+            }
+        }
+
+        self.emit_line(&format!("\n{}:", check_next_label));
+
+        // 检查父类
+        let parent_ptr = self.new_temp();
+        self.emit_line(&format!("  {} = bitcast i8* {} to i8**",
+            parent_ptr, current_type));
+
+        let parent_type = self.new_temp();
+        self.emit_line(&format!("  {} = load i8*, i8** {}",
+            parent_type, parent_ptr));
+
+        let has_parent = self.new_temp();
+        self.emit_line(&format!("  {} = icmp ne i8* {}, null",
+            has_parent, parent_type));
+
+        let continue_label = self.new_label("interface_check.cont");
+        self.emit_line(&format!("  br i1 {}, label %{}, label %{}",
+            has_parent, continue_label, false_label));
+
+        self.emit_line(&format!("\n{}:", continue_label));
+        self.emit_line(&format!("  store i8* {}, i8** {}", parent_type, current_type_var));
+        self.emit_line(&format!("  br label %{}", loop_label));
+
+        Ok(())
     }
 }

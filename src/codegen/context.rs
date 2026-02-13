@@ -112,6 +112,14 @@ impl ScopeManager {
     }
 }
 
+/// 类型标识符信息
+#[derive(Debug, Clone)]
+pub struct TypeIdInfo {
+    pub class_name: String,
+    pub parent_type_id: Option<String>,
+    pub interfaces: Vec<String>,
+}
+
 /// IR生成器核心上下文
 pub struct IRGenerator {
     pub output: String,
@@ -122,18 +130,20 @@ pub struct IRGenerator {
     pub global_counter: usize,
     pub current_function: String,
     pub current_class: String,
-    pub current_return_type: String,   // 当前函数的返回类型
-    pub var_types: HashMap<String, String>,  // 保留用于兼容性
+    pub current_return_type: String,
+    pub var_types: HashMap<String, String>,
     pub var_class_map: HashMap<String, String>,
-    pub loop_stack: Vec<LoopContext>,  // 循环上下文栈
-    pub target_triple: String,         // 目标平台三元组
-    pub static_fields: Vec<StaticFieldInfo>, // 静态字段列表
-    pub static_field_map: HashMap<String, StaticFieldInfo>, // 静态字段映射（按类名.字段名）
-    pub type_registry: Option<TypeRegistry>, // 类型注册表（可选，用于方法查找）
-    pub scope_manager: ScopeManager,   // 作用域管理器
-    pub lambda_functions: Vec<String>, // Lambda 函数字符串列表
-    pub code: String,                  // 当前代码缓冲区
-    pub method_declarations: Vec<String>, // 方法声明列表
+    pub loop_stack: Vec<LoopContext>,
+    pub target_triple: String,
+    pub static_fields: Vec<StaticFieldInfo>,
+    pub static_field_map: HashMap<String, StaticFieldInfo>,
+    pub type_registry: Option<TypeRegistry>,
+    pub scope_manager: ScopeManager,
+    pub lambda_functions: Vec<String>,
+    pub code: String,
+    pub method_declarations: Vec<String>,
+    pub type_id_map: HashMap<String, TypeIdInfo>,
+    pub type_id_counter: usize,
 }
 
 impl IRGenerator {
@@ -163,6 +173,8 @@ impl IRGenerator {
             lambda_functions: Vec::new(),
             code: String::new(),
             method_declarations: Vec::new(),
+            type_id_map: HashMap::new(),
+            type_id_counter: 0,
         }
     }
 
@@ -326,5 +338,74 @@ impl IRGenerator {
             Type::Array(inner) => format!("a{}", self.type_to_signature(inner)),
             Type::Function(_) => "fn".to_string(),
         }
+    }
+
+    /// 注册类型标识符
+    pub fn register_type_id(&mut self, class_name: &str, parent_name: Option<&str>, interfaces: Vec<String>) -> String {
+        let type_id = format!("@__type_id_{}", class_name);
+        let parent_type_id = parent_name.map(|p| format!("@__type_id_{}", p));
+        
+        self.type_id_map.insert(
+            class_name.to_string(),
+            TypeIdInfo {
+                class_name: class_name.to_string(),
+                parent_type_id,
+                interfaces,
+            }
+        );
+        
+        type_id
+    }
+
+    /// 获取类型标识符
+    pub fn get_type_id(&self, class_name: &str) -> Option<String> {
+        self.type_id_map.get(class_name).map(|_| format!("@__type_id_{}", class_name))
+    }
+
+    /// 检查类型是否是另一个类型的子类或实现了该接口
+    pub fn is_subtype(&self, class_name: &str, target_name: &str) -> bool {
+        if class_name == target_name {
+            return true;
+        }
+        
+        let mut current = class_name.to_string();
+        while let Some(info) = self.type_id_map.get(&current) {
+            // 检查是否实现了目标接口
+            if info.interfaces.contains(&target_name.to_string()) {
+                return true;
+            }
+            // 检查父类
+            if let Some(ref parent) = info.parent_type_id {
+                let parent_class = parent.replace("@__type_id_", "");
+                if parent_class == target_name {
+                    return true;
+                }
+                current = parent_class;
+            } else {
+                break;
+            }
+        }
+        
+        false
+    }
+
+    /// 生成类型标识符全局变量声明
+    pub fn emit_type_id_declarations(&self) -> String {
+        let mut result = String::new();
+        for (class_name, info) in &self.type_id_map {
+            let type_id_name = format!("@__type_id_{}", class_name);
+            if let Some(ref parent) = info.parent_type_id {
+                result.push_str(&format!(
+                    "{} = private constant i8* {}, align 8\n",
+                    type_id_name, parent
+                ));
+            } else {
+                result.push_str(&format!(
+                    "{} = private constant i8* null, align 8\n",
+                    type_id_name
+                ));
+            }
+        }
+        result
     }
 }

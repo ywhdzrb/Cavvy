@@ -27,8 +27,6 @@ public class TestInstanceOf {
         Rectangle rect = new Rectangle();
 
         // 测试 instanceof 运算符
-        // 注意：由于当前实现是简化版，instanceof 只检查 null
-        // 非 null 对象返回 true，null 返回 false
 
         // 测试 Shape 类型
         if (shape instanceof Shape) {

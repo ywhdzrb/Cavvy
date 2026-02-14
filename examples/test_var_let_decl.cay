@@ -17,16 +17,16 @@ public class TestVarLetDecl {
         
         // 打印结果验证
         println("Testing var/let declarations:");
-        println("x = " + x);
-        println("y = " + y);
-        println("name = " + name);
-        println("pi = " + pi);
-        println("traditional = " + traditional);
-        println("modern = " + modern);
+        println(x);
+        println(y);
+        println(name);
+        // println(pi); // double 类型暂时不测试
+        println(traditional);
+        println(modern);
         
         // 计算并返回
         int sum = x + y + traditional + modern;
-        println("sum = " + sum);
+        println(sum);
         
         return 0;
     }

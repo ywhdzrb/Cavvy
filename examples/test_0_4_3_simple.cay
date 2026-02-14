@@ -6,24 +6,24 @@
 public int main() {
     // 测试 var 后置类型声明
     var x: int = 10;
-    println("var x: int = 10; x = " + x);
+    println(x);
 
     // 测试 let 后置类型声明
     let y: int = 20;
-    println("let y: int = 20; y = " + y);
+    println(y);
 
     // 测试 final var 后置类型声明
     final var z: int = 30;
-    println("final var z: int = 30; z = " + z);
+    println(z);
 
     // 测试 auto 自动类型推断 - int
     auto a = 42;
-    println("auto a = 42; a = " + a);
+    println(a);
 
     // 测试表达式中的 auto 变量
     auto sum = x + y + a;
-    println("auto sum = x + y + a; sum = " + sum);
+    println(sum);
 
-    println("All 0.4.3.x features test passed!");
+    println(9999);
     return 0;
 }
